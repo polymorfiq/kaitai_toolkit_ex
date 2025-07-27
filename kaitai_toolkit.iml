@@ -14,6 +14,10 @@
       <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/makeup_elixir" />
       <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/makeup_erlang" />
       <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/nimble_parsec" />
+      <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/yamerl" />
+      <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/yaml_elixir" />
+      <excludeFolder url="file://$MODULE_DIR$/_build/test/lib/yamerl" />
+      <excludeFolder url="file://$MODULE_DIR$/_build/test/lib/yaml_elixir" />
       <excludeFolder url="file://$MODULE_DIR$/assets/node_modules/phoenix" />
       <excludeFolder url="file://$MODULE_DIR$/assets/node_modules/phoenix_html" />
       <excludeFolder url="file://$MODULE_DIR$/cover" />
@@ -36,5 +40,7 @@
     <orderEntry type="library" name="benchee" level="project" />
     <orderEntry type="library" name="benchee_markdown" level="project" />
     <orderEntry type="library" name="stream_data" level="project" />
+    <orderEntry type="library" name="yamerl" level="project" />
+    <orderEntry type="library" name="yaml_elixir" level="project" />
   </component>
 </module>

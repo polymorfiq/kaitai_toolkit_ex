@@ -3,16 +3,7 @@ defmodule KaitaiToolkit do
   Documentation for `KaitaiToolkit`.
   """
 
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> KaitaiToolkit.hello()
-      :world
-
-  """
-  def hello do
-    :world
+  defmacro use_kaitai_struct(contents) do
+    YamlElixir.read_all_from_string!(contents) |> IO.inspect(label: "hmmm")
   end
 end
