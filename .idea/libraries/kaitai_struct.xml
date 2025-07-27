@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="kaitai_struct" type="mix">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/_build/test/lib/kaitai_struct/ebin" />
+      <root url="file://$PROJECT_DIR$/_build/test/lib/kaitai_struct/ebin" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="file://$PROJECT_DIR$/deps/kaitai_struct/lib" />
+      <root url="file://$PROJECT_DIR$/deps/kaitai_struct/lib" />
+    </SOURCES>
+  </library>
+</component>

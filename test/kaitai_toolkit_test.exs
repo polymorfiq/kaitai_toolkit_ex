@@ -2,12 +2,9 @@ defmodule KaitaiToolkitTest do
   use ExUnit.Case
   doctest KaitaiToolkit
 
-  test "has a use_kaitai_struct macro" do
+  test "has a use macro" do
     defmodule TestExample do
-      import KaitaiToolkit
-      use_kaitai_struct """
-      abc
-      """
+      use KaitaiToolkit.Struct, contents: ""
     end
   end
 end
