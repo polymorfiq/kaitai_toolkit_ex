@@ -10,6 +10,7 @@
       <excludeFolder url="file://$MODULE_DIR$/.elixir_ls" />
       <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/earmark_parser" />
       <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/ex_doc" />
+      <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/kaitai_struct" />
       <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/makeup" />
       <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/makeup_elixir" />
       <excludeFolder url="file://$MODULE_DIR$/_build/dev/lib/makeup_erlang" />

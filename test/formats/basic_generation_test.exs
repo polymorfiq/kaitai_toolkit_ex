@@ -19,6 +19,8 @@ defmodule KaitaiToolkitTest.Formats.BasicGenerationTest do
             seq:
               - id: save_header_version
                 type: s4le
+              - id: data_stream
+                type: io
       """
     end
 
