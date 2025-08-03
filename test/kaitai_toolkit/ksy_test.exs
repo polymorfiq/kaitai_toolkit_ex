@@ -4,6 +4,8 @@ defmodule KaitaiToolkit.KsyTest do
 
   import KaitaiToolkit.Ksy
 
+  alias KaitaiToolkit.Ksy.EnumSpec
+
   test "reads meta correctly" do
     [spec] = ~k"""
     meta:
@@ -195,5 +197,62 @@ defmodule KaitaiToolkit.KsyTest do
     assert e.id == "e_attr"
     assert e.repeat == :eos
     assert e.type == %{switch_on: "d_attr", cases: [{"abc", :u2}, {"def", :u4}]}
+  end
+
+  test "instances is parsed correctly" do
+    [spec] = ~k"""
+    instances:
+      some_inst:
+        id: a_attr
+        doc: My Doc
+        doc-ref: My Doc Ref
+        enum: an_enum
+        type: u8le
+    """
+
+    assert a = spec.instances["some_inst"]
+    assert a.id == "a_attr"
+    assert a.doc == "My Doc"
+    assert a.doc_ref == ["My Doc Ref"]
+    assert a.type == :u8le
+    assert a.enum == "an_enum"
+    assert a.pad_right == 0
+    assert a.consume == true
+    assert a.include == false
+    assert a.eos_error == true
+  end
+
+  test "enums is parsed correctly" do
+    [spec] = ~k"""
+    enums:
+      my_enum:
+        14: alphabet
+        45:
+          id: icmp
+          doc: Internet Control Message Protocol
+          doc-ref: https://www.ietf.org/rfc/rfc792
+    """
+
+    assert [
+             {14, %EnumSpec{id: "alphabet"}},
+             {45,
+              %EnumSpec{
+                id: "icmp",
+                doc: "Internet Control Message Protocol",
+                doc_ref: ["https://www.ietf.org/rfc/rfc792"]
+              }}
+           ] = spec.enums["my_enum"]
+  end
+
+  test "types are parsed correctly" do
+    [spec] = ~k"""
+    types:
+      my_type:
+        seq:
+          - id: some_int
+            type: u8
+    """
+
+    assert [%{type: :u8}] = spec.types["my_type"].seq
   end
 end

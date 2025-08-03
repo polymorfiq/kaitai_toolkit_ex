@@ -59,7 +59,7 @@ defmodule KaitaiToolkit.Ksy.Attribute do
 
   @spec from_map!(map()) :: t()
   def from_map!(data) when is_map(data) do
-    %{
+    %__MODULE__{
       id: id(data["id"]),
       doc: doc(data["doc"]),
       doc_ref: doc_ref(data["doc-ref"]),

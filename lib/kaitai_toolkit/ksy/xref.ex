@@ -23,7 +23,7 @@ defmodule KaitaiToolkit.Ksy.Xref do
 
   @spec from_map!(map()) :: t()
   def from_map!(data) when is_map(data) do
-    %{
+    %__MODULE__{
       forensics_wiki: forensics_wiki(data["forensicswiki"]),
       iso: iso(data["iso"]),
       just_solve: just_solve(data["justsolve"]),

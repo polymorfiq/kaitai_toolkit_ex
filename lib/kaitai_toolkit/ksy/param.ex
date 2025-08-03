@@ -13,7 +13,7 @@ defmodule KaitaiToolkit.Ksy.Param do
 
   @spec from_map!(map()) :: t()
   def from_map!(data) when is_map(data) do
-    %{
+    %__MODULE__{
       id: id(data["id"]),
       type: type(data["type"]),
       doc: doc(data["doc"]),

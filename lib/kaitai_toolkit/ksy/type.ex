@@ -1,10 +1,9 @@
-defmodule KaitaiToolkit.Ksy do
+defmodule KaitaiToolkit.Ksy.Type do
   alias KaitaiToolkit.Ksy.Attribute
   alias KaitaiToolkit.Ksy.EnumSpec
   alias KaitaiToolkit.Ksy.Instances
   alias KaitaiToolkit.Ksy.Meta
   alias KaitaiToolkit.Ksy.Param
-  alias KaitaiToolkit.Ksy.Type
 
   defstruct [
     :meta,
@@ -23,21 +22,14 @@ defmodule KaitaiToolkit.Ksy do
           doc_ref: [String.t()],
           params: [Param.t()],
           seq: [Attribute.t()],
-          types: Type.types(),
+          types: types(),
           instances: Instances.t(),
           enums: Enum.enums()
         }
 
-  @spec sigil_k(String.t(), keyword()) :: t()
-  def sigil_k(spec_str, []), do: from_str!(spec_str)
+  @type types :: %{String.t() => t()}
 
-  @spec from_str!(String.t()) :: [t()]
-  def from_str!(spec_str) do
-    YamlElixir.read_all_from_string!(spec_str)
-    |> Enum.map(&from_map!/1)
-  end
-
-  @spec from_map!(map()) :: t()
+  @spec from_map!(String.t()) :: [t()]
   def from_map!(spec) do
     %__MODULE__{
       meta: meta(spec["meta"]),
@@ -71,7 +63,7 @@ defmodule KaitaiToolkit.Ksy do
 
   defp types(types) do
     Map.new(types, fn {key, type_def} ->
-      {key, Type.from_map!(type_def)}
+      {key, from_map!(type_def)}
     end)
   end
 
