@@ -25,6 +25,13 @@ defmodule KaitaiToolkitTest.Formats.BasicGenerationTest do
         """
     end
 
-    assert TestExample.SaveFileHeader.read!(123)
+    io = binary_stream(<<14::size(128)>>)
+    assert TestExample.SaveFileHeader.read!(io)
+  end
+
+  defp binary_stream(bin_data) do
+    io_stream = StringIO.open(bin_data) |> then(fn {:ok, io} -> IO.binstream(io, 1) end)
+    {:ok, kaitai} = GenServer.start_link(KaitaiStruct.Stream, {io_stream, byte_size(bin_data)})
+    kaitai
   end
 end

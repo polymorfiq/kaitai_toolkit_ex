@@ -19,4 +19,11 @@ defmodule KaitaiToolkit.Struct do
 
     generated
   end
+
+  @spec parse_expr!(map(), term()) :: term()
+  def parse_expr!(data, {:expr, expr}) do
+    Map.fetch!(data, String.to_atom(expr))
+  end
+
+  def parse_expr!(_data, non_expr), do: non_expr
 end

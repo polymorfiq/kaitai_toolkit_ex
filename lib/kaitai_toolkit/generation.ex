@@ -16,18 +16,7 @@ defmodule KaitaiToolkit.Generation do
     nested_modules =
       solved_deps
       |> Enum.map(fn {mod_name, mod} ->
-        abs_mod_name = Module.concat(opts[:root], mod_name)
-
-        quote do
-          defmodule unquote(abs_mod_name) do
-            unquote_splicing(gen_aliases(mod))
-
-            unquote(gen_module_defstruct(mod))
-            unquote(gen_module_typespec(mod))
-
-            unquote_splicing(gen_read_functions(mod))
-          end
-        end
+        gen_module(mod_name, mod, opts)
       end)
 
     quote do
@@ -38,7 +27,20 @@ defmodule KaitaiToolkit.Generation do
       unquote(gen_module_defstruct(root_module))
       unquote(gen_module_typespec(root_module))
 
-      unquote_splicing(gen_read_functions(root_module))
+      unquote_splicing(gen_read_functions(root_module, opts))
+    end
+  end
+
+  defp gen_module(mod_name, mod, opts) do
+    quote do
+      defmodule unquote(mod_name) do
+        unquote_splicing(gen_aliases(mod))
+
+        unquote(gen_module_defstruct(mod))
+        unquote(gen_module_typespec(mod))
+
+        unquote_splicing(gen_read_functions(mod, opts))
+      end
     end
   end
 
@@ -65,24 +67,146 @@ defmodule KaitaiToolkit.Generation do
     ]
   end
 
-  defp gen_read_functions(_mod) do
-    read_spec = quote do: @spec(read!(io :: KaitaiStream.t()) :: t())
+  defp gen_read_functions(mod, opts) do
+    read_spec = quote do
+      @spec(read!(io :: KaitaiStream.t()) :: t())
+    end
 
+    base_map = quote do: %{}
     read_def =
       quote do
         def read!(io) do
-          %__MODULE__{}
+          unquote(gen_read_steps(mod, base_map, mod.attrs, opts))
         end
       end
 
     [read_spec, read_def]
   end
 
+  defp gen_read_steps(mod, left, [], _opts) do
+    quote do
+      unquote(left) |> then(& struct(__MODULE__, &1))
+    end
+  end
+
+  defp gen_read_steps(mod, left, [attr | rest_attrs], opts) do
+    attr_id = String.to_atom(attr.name)
+    with_step = gen_read_step(attr, mod, left, opts)
+
+    gen_read_steps(mod, with_step, rest_attrs, opts)
+  end
+
+  defp gen_read_step(%{data_type: :u1} = attr, mod, left, _opts),
+    do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u1!(io))
+
+  defp gen_read_step(%{data_type: :u2} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u2le!(io))
+
+  defp gen_read_step(%{data_type: :u2le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u2le!(io))
+
+  defp gen_read_step(%{data_type: :u2be} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u2be!(io))
+
+  defp gen_read_step(%{data_type: :u4} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u4le!(io))
+
+  defp gen_read_step(%{data_type: :u4le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u4le!(io))
+
+  defp gen_read_step(%{data_type: :u4be} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u4be!(io))
+
+  defp gen_read_step(%{data_type: :u8} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u8le!(io))
+
+  defp gen_read_step(%{data_type: :u8le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u8le!(io))
+
+  defp gen_read_step(%{data_type: :u8be} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_u8be!(io))
+
+  defp gen_read_step(%{data_type: :s1} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s1!(io))
+
+  defp gen_read_step(%{data_type: :s2} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s2le!(io))
+
+  defp gen_read_step(%{data_type: :s2le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s2le!(io))
+
+  defp gen_read_step(%{data_type: :s2be} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s2be!(io))
+
+  defp gen_read_step(%{data_type: :s4} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s4le!(io))
+
+  defp gen_read_step(%{data_type: :s4le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s4le!(io))
+
+  defp gen_read_step(%{data_type: :s4be} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s4be!(io))
+
+  defp gen_read_step(%{data_type: :s8} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s8le!(io))
+
+  defp gen_read_step(%{data_type: :s8le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s8le!(io))
+
+  defp gen_read_step(%{data_type: :s8be} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_s8be!(io))
+
+  defp gen_read_step(%{data_type: :f4} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_f4le!(io))
+
+  defp gen_read_step(%{data_type: :f4le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_f4le!(io))
+
+  defp gen_read_step(%{data_type: :f4le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_f4be!(io))
+
+  defp gen_read_step(%{data_type: :f8} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_f8le!(io))
+
+  defp gen_read_step(%{data_type: :f8le} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_f8le!(io))
+
+  defp gen_read_step(%{data_type: :f8be} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_f8be!(io))
+
+  defp gen_read_step(%{data_type: :bytes} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> then(& Map.put(&1, unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_bytes_array!(io, KaitaiToolkit.Struct.parse_expr!(&1, unquote(attr.attr.size)))))
+
+  defp gen_read_step(%{data_type: :io} = attr, mod, left, _opts),
+       do: quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), io)
+
+  defp gen_read_step(%{data_type: :str} = attr, mod, left, opts) do
+    quote do
+      unquote(left) |> then(& Map.put(&1, unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_bytes_array!(io, KaitaiToolkit.Struct.parse_expr!(&1, unquote(attr.attr.size)))))
+    end
+  end
+
+  defp gen_read_step(%{data_type: :strz} = attr, mod, left, opts) do
+    quote do
+      unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), KaitaiStruct.Stream.read_bytes_term!(io, unquote(attr.attr.encoding || "UTF-8"), unquote(0), unquote(attr.attr.include), unquote(attr.attr.consume), unquote(attr.attr.eos_error)))
+    end
+  end
+
+  defp gen_read_step(%{data_type: {:user_defined, name}} = attr, mod, left, opts) do
+    custom_mod_name = :"#{Module.concat(opts[:root], Macro.camelize(name))}"
+    {custom_mod_name, opts} |> IO.inspect(label: "hmm")
+    quote do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), unquote(custom_mod_name).read!(io))
+  end
+
+  defp gen_read_step(%{data_type: %{switch_on: _, cases: _}} = attr, mod, left, opts) do
+    quote do: unquote(left) |> then(fn _ -> raise "switches are not implemented yet!" end)
+  end
+
   defp extract_modules(ksy, opts) do
     modules =
       ksy.types
       |> Enum.map(fn {type_id, type} ->
-        mod_name = :"#{Module.concat(opts[:namespace], Macro.camelize(type_id))}"
+        mod_name = :"#{Module.concat(opts[:root], Macro.camelize(type_id))}"
         mod_def = type_to_module(type, opts)
 
         {mod_name, mod_def}
@@ -91,8 +215,8 @@ defmodule KaitaiToolkit.Generation do
     nested_modules =
       ksy.types
       |> Enum.flat_map(fn {type_id, type} ->
-        namespace = Module.concat(opts[:namespace], Macro.camelize(type_id))
-        processed = extract_modules(type, opts ++ [namespace: namespace])
+        root = Module.concat(opts[:root], Macro.camelize(type_id))
+        processed = extract_modules(type, opts ++ [root: root])
 
         processed
       end)
@@ -112,7 +236,7 @@ defmodule KaitaiToolkit.Generation do
       Enum.flat_map(type.seq, fn attr ->
         case attr.type do
           {:user_defined, name} ->
-            [:"#{Module.concat(opts[:namespace], Macro.camelize(name))}"]
+            [:"#{Module.concat(opts[:root], Macro.camelize(name))}"]
 
           _ ->
             []
