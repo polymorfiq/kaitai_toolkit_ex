@@ -1,4 +1,6 @@
 defmodule KaitaiToolkit.Ksy do
+  @moduledoc "Based on specification from https://doc.kaitai.io/ksy_diagram.html"
+
   alias KaitaiToolkit.Ksy.Attribute
   alias KaitaiToolkit.Ksy.EnumSpec
   alias KaitaiToolkit.Ksy.Instances
