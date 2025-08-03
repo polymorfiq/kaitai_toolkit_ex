@@ -67,7 +67,6 @@ defmodule KaitaiToolkit.Ksy.ScalarType do
     end
   end
 
-
   @spec ref_from_str!(String.t()) :: type_ref()
   def ref_from_str!(nil), do: :bytes
   def ref_from_str!("u1"), do: :u1

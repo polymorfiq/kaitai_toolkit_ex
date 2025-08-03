@@ -123,10 +123,14 @@ defmodule KaitaiToolkit.KsyTest do
       - id: a_attr
         doc: My Doc
         doc-ref: My Doc Ref
+        enum: an_enum
         type: u8le
       - id: b_attr
         if: a_attr == 123
         process: xor(123, 456)
+        consume: false
+        include: true
+        eos-error: false
         type: b123
       - id: c_attr
         repeat: expr
@@ -135,8 +139,12 @@ defmodule KaitaiToolkit.KsyTest do
       - id: d_attr
         process: my_custom_thing(a, 999, c)
         type: str
+        terminator: 0
+        pos: 5
+        encoding: UTF-8
       - id: size_attr
         size: 456
+        pad-right: 5
       - id: e_attr
         repeat: eos
         type:
@@ -151,11 +159,19 @@ defmodule KaitaiToolkit.KsyTest do
     assert a.doc == "My Doc"
     assert a.doc_ref == ["My Doc Ref"]
     assert a.type == :u8le
+    assert a.enum == "an_enum"
+    assert a.pad_right == 0
+    assert a.consume == true
+    assert a.include == false
+    assert a.eos_error == true
 
     assert b.id == "b_attr"
     assert b.if == "a_attr == 123"
     assert b.type == {:bits, 123}
     assert b.process == {:xor, [123, 456]}
+    assert b.consume == false
+    assert b.include == true
+    assert b.eos_error == false
 
     assert c.id == "c_attr"
     assert c.repeat == :expr
@@ -164,11 +180,17 @@ defmodule KaitaiToolkit.KsyTest do
 
     assert d.id == "d_attr"
     assert d.type == :str
-    assert d.process == {:custom_processor, {"my_custom_thing", [{:expr, "a"}, 999, {:expr, "c"}]}}
+    assert d.encoding == "UTF-8"
+    assert d.pos == 5
+    assert d.terminator == <<0>>
+
+    assert d.process ==
+             {:custom_processor, {"my_custom_thing", [{:expr, "a"}, 999, {:expr, "c"}]}}
 
     assert size.id == "size_attr"
     assert size.type == :bytes
     assert size.size == 456
+    assert size.pad_right == 5
 
     assert e.id == "e_attr"
     assert e.repeat == :eos

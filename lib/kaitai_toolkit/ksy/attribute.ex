@@ -38,7 +38,23 @@ defmodule KaitaiToolkit.Ksy.Attribute do
           repeat_expr: non_neg_integer() | {:expr, String.t()} | nil,
           if: String.t() | nil,
           size: non_neg_integer() | {:expr, String.t()} | nil,
-          process: {:xor, binary()} | {:rol, non_neg_integer()} | {:ror, non_neg_integer()} | :zlib | {:custom_processor, {String.t(), [term()]}}
+          process:
+            {:xor, binary()}
+            | {:rol, non_neg_integer()}
+            | {:ror, non_neg_integer()}
+            | :zlib
+            | {:custom_processor, {String.t(), [term()]}}
+            | nil,
+          enum: String.t() | nil,
+          encoding: String.t() | nil,
+          pad_right: non_neg_integer(),
+          terminator: binary() | nil,
+          consume: boolean(),
+          include: boolean(),
+          eos_error: boolean(),
+          pos: non_neg_integer() | {:expr, String.t()} | nil,
+          io: {:io_stream, String.t()},
+          value: String.t()
         }
 
   @spec from_map!(map()) :: t()
@@ -54,7 +70,17 @@ defmodule KaitaiToolkit.Ksy.Attribute do
       if: if(data["if"]),
       size: size(data["size"]),
       size_eos: size_eos(data["size-eos"]),
-      process: process(data["process"])
+      process: process(data["process"]),
+      enum: enum(data["enum"]),
+      encoding: encoding(data["encoding"]),
+      pad_right: pad_right(data["pad-right"]),
+      terminator: terminator(data["terminator"]),
+      consume: consume(data["consume"]),
+      include: include(data["include"]),
+      eos_error: eos_error(data["eos-error"]),
+      pos: pos(data["pos"]),
+      io: io(data["io"]),
+      value: value(data["value"])
     }
   end
 
@@ -68,6 +94,7 @@ defmodule KaitaiToolkit.Ksy.Attribute do
 
   defp type(nil), do: :bytes
   defp type(type) when is_binary(type), do: ScalarType.ref_from_str!(type)
+
   defp type(%{"switch-on" => switch_on, "cases" => cases}) do
     cases =
       cases
@@ -93,32 +120,21 @@ defmodule KaitaiToolkit.Ksy.Attribute do
 
   defp repeat_expr(nil), do: nil
   defp repeat_expr(num) when is_integer(num), do: num
-  defp repeat_expr(str) when is_binary(str) do
-    if Regex.match?(~r|^[0-9]+$|, str) do
-      String.to_integer(str)
-    else
-      {:expr, str}
-    end
-  end
+  defp repeat_expr(str) when is_binary(str), do: {:expr, str}
 
   defp if(nil), do: nil
   defp if(condition) when is_binary(condition), do: condition
 
   defp size(nil), do: nil
   defp size(num) when is_integer(num), do: num
-  defp size(str) when is_binary(str) do
-    if Regex.match?(~r|^[0-9]+$|, str) do
-      String.to_integer(str)
-    else
-      {:expr, str}
-    end
-  end
+  defp size(str) when is_binary(str), do: {:expr, str}
 
   defp size_eos(nil), do: false
   defp size_eos(eos) when is_boolean(eos), do: eos
 
   defp process(nil), do: nil
   defp process("zlib"), do: :zlib
+
   defp process(process_str) do
     [[_, fn_name, args_str]] = Regex.scan(~r|([a-z][a-z0-9_\.]*)\((.*)\)|, process_str)
 
@@ -142,4 +158,37 @@ defmodule KaitaiToolkit.Ksy.Attribute do
       end
     end)
   end
+
+  defp enum(nil), do: nil
+  defp enum(enum) when is_binary(enum), do: enum
+
+  defp encoding(nil), do: nil
+  defp encoding(encoding) when is_binary(encoding), do: encoding
+
+  defp pad_right(nil), do: 0
+  defp pad_right(pad_right) when is_integer(pad_right), do: pad_right
+  defp pad_right(pad_right) when is_binary(pad_right), do: String.to_integer(pad_right)
+
+  defp terminator(nil), do: nil
+  defp terminator(byte) when is_integer(byte), do: <<byte>>
+  defp terminator(byte_arry) when is_binary(byte_arry), do: byte_arry
+
+  defp consume(nil), do: true
+  defp consume(consume) when is_boolean(consume), do: consume
+
+  defp include(nil), do: false
+  defp include(include) when is_boolean(include), do: include
+
+  defp eos_error(nil), do: true
+  defp eos_error(eos_error) when is_boolean(eos_error), do: eos_error
+
+  defp pos(nil), do: nil
+  defp pos(pos) when is_integer(pos), do: pos
+  defp pos(pos) when is_binary(pos), do: {:expr, pos}
+
+  defp io(nil), do: nil
+  defp io(io), do: {:io_stream, io}
+
+  defp value(nil), do: nil
+  defp value(value), do: {:io_stream, value}
 end

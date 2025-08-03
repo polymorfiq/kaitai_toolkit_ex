@@ -25,7 +25,7 @@ defmodule KaitaiToolkit.Struct do
         unquote(
           Enum.map(spec["types"], fn {type_name, type_def} ->
             my_module = module_for_type(__CALLER__.module, spec, type_name, type_def)
-#            my_module |> Macro.to_string() |> Code.format_string!() |> IO.puts()
+            #            my_module |> Macro.to_string() |> Code.format_string!() |> IO.puts()
             my_module
           end)
         )
