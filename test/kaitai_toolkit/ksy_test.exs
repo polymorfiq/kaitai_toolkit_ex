@@ -7,7 +7,7 @@ defmodule KaitaiToolkit.KsyTest do
   alias KaitaiToolkit.Ksy.EnumSpec
 
   test "reads meta correctly" do
-    [spec] = ~k"""
+    spec = ~k"""
     meta:
       id: basic_save_file
       title: Example save file
@@ -78,7 +78,7 @@ defmodule KaitaiToolkit.KsyTest do
   end
 
   test "doc is parsed correctly" do
-    [spec] = ~k"""
+    spec = ~k"""
     doc: This is a doc
     """
 
@@ -86,7 +86,7 @@ defmodule KaitaiToolkit.KsyTest do
   end
 
   test "doc_ref is parsed correctly" do
-    [spec] = ~k"""
+    spec = ~k"""
     doc-ref: https://www.myref.io
     """
 
@@ -94,7 +94,7 @@ defmodule KaitaiToolkit.KsyTest do
   end
 
   test "params is parsed correctly" do
-    [spec] = ~k"""
+    spec = ~k"""
     params:
       - id: a_param
         doc: My Doc
@@ -120,7 +120,7 @@ defmodule KaitaiToolkit.KsyTest do
   end
 
   test "seq is parsed correctly" do
-    [spec] = ~k"""
+    spec = ~k"""
     seq:
       - id: a_attr
         doc: My Doc
@@ -200,7 +200,7 @@ defmodule KaitaiToolkit.KsyTest do
   end
 
   test "instances is parsed correctly" do
-    [spec] = ~k"""
+    spec = ~k"""
     instances:
       some_inst:
         id: a_attr
@@ -223,7 +223,7 @@ defmodule KaitaiToolkit.KsyTest do
   end
 
   test "enums is parsed correctly" do
-    [spec] = ~k"""
+    spec = ~k"""
     enums:
       my_enum:
         14: alphabet
@@ -245,7 +245,7 @@ defmodule KaitaiToolkit.KsyTest do
   end
 
   test "types are parsed correctly" do
-    [spec] = ~k"""
+    spec = ~k"""
     types:
       my_type:
         seq:

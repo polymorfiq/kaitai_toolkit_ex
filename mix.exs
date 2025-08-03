@@ -31,7 +31,7 @@ defmodule KaitaiToolkit.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:kaitai_struct, "~> 0.1.8"},
+      {:kaitai_struct, "~> 0.1.9"},
       {:yaml_elixir, "~> 2.11"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
       # {:dep_from_hexpm, "~> 0.3.0"},

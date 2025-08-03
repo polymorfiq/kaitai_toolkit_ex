@@ -35,8 +35,7 @@ defmodule KaitaiToolkit.Ksy do
 
   @spec from_str!(String.t()) :: [t()]
   def from_str!(spec_str) do
-    YamlElixir.read_all_from_string!(spec_str)
-    |> Enum.map(&from_map!/1)
+    YamlElixir.read_from_string!(spec_str) |> from_map!()
   end
 
   @spec from_map!(map()) :: t()

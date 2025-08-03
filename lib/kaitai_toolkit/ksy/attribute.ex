@@ -84,6 +84,8 @@ defmodule KaitaiToolkit.Ksy.Attribute do
     }
   end
 
+  defp id(nil), do: nil
+
   defp id(id) when is_binary(id) do
     if Regex.match?(~r|^[a-z][a-z0-9_]*$|, id) do
       id
