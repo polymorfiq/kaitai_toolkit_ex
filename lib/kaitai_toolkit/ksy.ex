@@ -25,7 +25,7 @@ defmodule KaitaiToolkit.Ksy do
           seq: [Attribute.t()],
           types: Type.types(),
           instances: Instances.t(),
-          enums: Enum.enums()
+          enums: EnumSpec.enums()
         }
 
   @spec sigil_k(String.t(), keyword()) :: t()

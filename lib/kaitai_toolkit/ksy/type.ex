@@ -24,7 +24,7 @@ defmodule KaitaiToolkit.Ksy.Type do
           seq: [Attribute.t()],
           types: types(),
           instances: Instances.t(),
-          enums: Enum.enums()
+          enums: EnumSpec.enums()
         }
 
   @type types :: %{String.t() => t()}
