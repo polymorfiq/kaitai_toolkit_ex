@@ -125,21 +125,53 @@ defmodule KaitaiToolkit.KsyTest do
         doc-ref: My Doc Ref
         type: u8le
       - id: b_attr
+        if: a_attr == 123
+        process: xor(123, 456)
         type: b123
       - id: c_attr
+        repeat: expr
+        repeat-expr: 123
         type: custom_type
+      - id: d_attr
+        process: my_custom_thing(a, 999, c)
+        type: str
+      - id: size_attr
+        size: 456
+      - id: e_attr
+        repeat: eos
+        type:
+          switch-on: d_attr
+          cases:
+            "abc": u2
+            "def": u4
     """
 
-    assert [a, b, c] = spec.seq
+    assert [a, b, c, d, size, e] = spec.seq
     assert a.id == "a_attr"
     assert a.doc == "My Doc"
     assert a.doc_ref == ["My Doc Ref"]
     assert a.type == :u8le
 
     assert b.id == "b_attr"
+    assert b.if == "a_attr == 123"
     assert b.type == {:bits, 123}
+    assert b.process == {:xor, [123, 456]}
 
     assert c.id == "c_attr"
+    assert c.repeat == :expr
+    assert c.repeat_expr == 123
     assert c.type == {:user_defined, "custom_type"}
+
+    assert d.id == "d_attr"
+    assert d.type == :str
+    assert d.process == {:custom_processor, {"my_custom_thing", [{:expr, "a"}, 999, {:expr, "c"}]}}
+
+    assert size.id == "size_attr"
+    assert size.type == :bytes
+    assert size.size == 456
+
+    assert e.id == "e_attr"
+    assert e.repeat == :eos
+    assert e.type == %{switch_on: "d_attr", cases: [{"abc", :u2}, {"def", :u4}]}
   end
 end

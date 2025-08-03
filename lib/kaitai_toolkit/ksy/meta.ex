@@ -28,7 +28,7 @@ defmodule KaitaiToolkit.Ksy.Meta do
           ks_opaque_types: boolean(),
           imports: [String.t()],
           encoding: String.t() | nil,
-          endian: :le | :be | %{switch_on: term(), cases: Keyword.t()} | nil
+          endian: :le | :be | %{switch_on: term(), cases: tuple()} | nil
         }
 
   @spec from_map!(map()) :: t()
@@ -100,7 +100,6 @@ defmodule KaitaiToolkit.Ksy.Meta do
         {key, "le"} -> {key, :le}
         {key, "be"} -> {key, :be}
       end)
-      |> Map.new()
 
     %{switch_on: switch_on, cases: cases}
   end
