@@ -9,7 +9,8 @@ defmodule KaitaiToolkit.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: [
-        description: "Kaitai Toolkit is a library for directly interpreting the Kaitai Struct language for common tasks.",
+        description:
+          "Kaitai Toolkit is a library for directly interpreting the Kaitai Struct language for common tasks.",
         licenses: ["MIT"],
         links: %{
           "github" => "https://github.com/polymorfiq/kaitai_toolkit_ex"
