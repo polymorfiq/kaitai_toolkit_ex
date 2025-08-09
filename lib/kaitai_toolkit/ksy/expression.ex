@@ -1,17 +1,50 @@
 defmodule KaitaiToolkit.Ksy.Expression do
   @spec parse(lexed :: [term()], context :: map()) :: tuple()
   def parse(lexed, context \\ %{})
-  def parse([cond_expr, :question_mark, true_expr, :colon, false_expr], ctx) do
-    {:ternary, parse([cond_expr], ctx), parse([true_expr], ctx), parse([false_expr], ctx)}
+
+  def parse([some_expr, :plus | other_expr], ctx) do
+    [{:add, parse([some_expr], ctx), parse(other_expr, ctx)}] |> parse(ctx)
   end
 
-  def parse([{:integer, num}], _), do: {:literal, num}
-  def parse([{:float, num}], _), do: {:literal, num}
-  def parse([:io], _) , do: {:meta, :io}
-  def parse([:root], _) , do: {:meta, :root}
-  def parse([:parent], _) , do: {:meta, :parent}
-  def parse([name], _) when is_binary(name), do: {:name, name}
-  def parse(lexed, _), do: {:unknown, lexed}
+  def parse([some_expr, :minus | other_expr], ctx) do
+    [{:subtract, parse([some_expr], ctx), parse(other_expr, ctx)}] |> parse(ctx)
+  end
+
+  def parse([some_expr, :slash | other_expr], ctx) do
+    [{:divide, parse([some_expr], ctx), parse(other_expr, ctx)}] |> parse(ctx)
+  end
+
+  def parse([some_expr, :star | other_expr], ctx) do
+    [{:multiply, parse([some_expr], ctx), parse(other_expr, ctx)}] |> parse(ctx)
+  end
+
+  def parse([some_expr, :has_equality | other_expr], ctx) do
+    {:equals, parse([some_expr], ctx), parse(other_expr, ctx)} |> parse(ctx)
+  end
+
+  def parse([cond_expr, :question_mark, true_expr, :colon | false_expr], ctx) do
+    {:ternary, parse([cond_expr], ctx), parse([true_expr], ctx), parse(false_expr, ctx)} |> parse_second_stage(ctx)
+  end
+
+  def parse([:minus, {:integer, num}], ctx), do: {:literal, -num} |> parse_second_stage(ctx)
+  def parse([:minus, {:float, num}], ctx), do: {:literal, -num} |> parse_second_stage(ctx)
+
+  def parse([{:add, {:literal, a}, {:literal, b}}], ctx), do: [{:literal, a + b}] |> parse(ctx)
+  def parse([{:subtract, {:literal, a}, {:literal, b}}], ctx), do: [{:literal, a - b}] |> parse(ctx)
+  def parse([{:multiply, {:literal, a}, {:literal, b}}], ctx), do: [{:literal, a * b}] |> parse(ctx)
+  def parse([{:divide, {:literal, a}, {:literal, b}}], ctx), do: [{:literal, a / b}] |> parse(ctx)
+
+  def parse([{:parens, expr}], ctx), do: parse(expr, ctx)
+  def parse([{:literal, expr}], ctx), do: {:literal, expr} |> parse_second_stage(ctx)
+  def parse([{:integer, num}], ctx), do: {:literal, num} |> parse_second_stage(ctx)
+  def parse([{:float, num}], ctx), do: {:literal, num} |> parse_second_stage(ctx)
+  def parse([:io], ctx) , do: {:meta, :io} |> parse_second_stage(ctx)
+  def parse([:root], ctx) , do: {:meta, :root} |> parse_second_stage(ctx)
+  def parse([:parent], ctx) , do: {:meta, :parent} |> parse_second_stage(ctx)
+  def parse([name], ctx) when is_binary(name), do: {:name, name} |> parse_second_stage(ctx)
+  def parse(lexed, ctx), do: {:unknown, lexed} |> parse_second_stage(ctx)
+
+  defp parse_second_stage(parsed, _ctx), do: parsed
 
   @spec lex(str :: binary(), curr_word :: binary(), lexed :: [binary()], context :: map()) :: [term()]
   def lex(str, word \\ <<>>, lexed \\ [], context \\ %{in_single_string: false, in_double_string: false})
@@ -324,61 +357,84 @@ defmodule KaitaiToolkit.Ksy.Expression do
     end
   end
 
-  defp lex_second_stage(lexed, lex_2 \\ [])
-  defp lex_second_stage([], lex_2), do: lex_2
+  defp lex_second_stage(lexed, lex_2 \\ [], ctx \\ %{parens_depth: 0, bracket_depth: 0})
 
-  # Transform minus (integer) into negative number
-  defp lex_second_stage([:minus, {:integer, num} | rest], lex_2),
-    do: lex_second_stage([{:integer, -num} | rest], lex_2)
+  defp lex_second_stage([], lex_2, %{parens_depth: depth}) when depth > 0,
+    do: "Expression finished with unclosed parenthesis"
 
-  # Transform minus (float) into negative number
-  defp lex_second_stage([:minus, {:float, num} | rest], lex_2),
-      do: lex_second_stage([{:float, -num} | rest], lex_2)
+  defp lex_second_stage([], lex_2, %{bracket_depth: depth}) when depth > 0,
+       do: "Expression finished with unclosed square brackets"
 
-  # Double negation is nothing - ignore it
-  defp lex_second_stage([:exclamation, :exclamation | rest], lex_2),
-       do: lex_second_stage(rest, lex_2)
+  defp lex_second_stage([], lex_2, _), do: lex_2
 
-  defp lex_second_stage([:not, :not | rest], lex_2),
-       do: lex_second_stage(rest, lex_2)
+  # Keep track of when parens was opened
+  defp lex_second_stage([:open_parens | rest] = remaining, lex_2, ctx) do
+    lex_second_stage(rest, lex_2 ++ [{:open_parens, ctx.parens_depth+1}], %{ctx | parens_depth: ctx.parens_depth + 1})
+  end
 
-  defp lex_second_stage([:exclamation, :true | rest], lex_2),
-       do: lex_second_stage([:false | rest], lex_2)
+  defp lex_second_stage([:close_parens | rest] = remaining, lex_2, ctx) do
+    split_by_parens_opening = Enum.split_while(lex_2, & &1 != {:open_parens, ctx.parens_depth})
 
-  defp lex_second_stage([:not, :true | rest], lex_2),
-       do: lex_second_stage([:false | rest], lex_2)
+    new_lex_2 = case split_by_parens_opening do
+      {before_parens, parens_and_inside} ->
+        inside_parens = parens_and_inside |> Enum.filter(& &1 != {:open_parens, ctx.parens_depth})
+        before_parens ++ [{:parens, inside_parens}]
 
-  defp lex_second_stage([:exclamation, :false | rest], lex_2),
-       do: lex_second_stage([:true | rest], lex_2)
+      _ ->
+        raise "Found closing ')' but could not find matching '(' - #{inspect(lex_2 ++ [:close_parens])}"
+    end
 
-  defp lex_second_stage([:not, :false | rest], lex_2),
-       do: lex_second_stage([:true | rest], lex_2)
+    lex_second_stage(rest, new_lex_2, %{ctx | parens_depth: ctx.parens_depth - 1})
+  end
+
+  # Clean up double negatives (--)
+  defp lex_second_stage([:minus, :minus | rest], lex_2, ctx),
+    do: lex_second_stage([:plus | rest], lex_2, ctx)
+
+  # Clean up double negatives (!!)
+  defp lex_second_stage([:exclamation, :exclamation | rest], lex_2, ctx),
+       do: lex_second_stage(rest, lex_2, ctx)
+
+  defp lex_second_stage([:not, :not | rest], lex_2, ctx),
+       do: lex_second_stage(rest, lex_2, ctx)
+
+  defp lex_second_stage([:exclamation, :true | rest], lex_2, ctx),
+       do: lex_second_stage([:false | rest], lex_2, ctx)
+
+  defp lex_second_stage([:not, :true | rest], lex_2, ctx),
+       do: lex_second_stage([:false | rest], lex_2, ctx)
+
+  defp lex_second_stage([:exclamation, :false | rest], lex_2, ctx),
+       do: lex_second_stage([:true | rest], lex_2, ctx)
+
+  defp lex_second_stage([:not, :false | rest], lex_2, ctx),
+       do: lex_second_stage([:true | rest], lex_2, ctx)
 
   # Transform != into :not_equals
-  defp lex_second_stage([:exclamation, :equals | rest], lex_2),
-       do: lex_second_stage([:not_equals | rest], lex_2)
+  defp lex_second_stage([:exclamation, :equals | rest], lex_2, ctx),
+       do: lex_second_stage([:not_equals | rest], lex_2, ctx)
 
   # Transforms <= into :lt_or_equals
-  defp lex_second_stage([:left_arrow, :equals | rest], lex_2),
-       do: lex_second_stage([:lt_or_equals | rest], lex_2)
+  defp lex_second_stage([:left_arrow, :equals | rest], lex_2, ctx),
+       do: lex_second_stage([:lt_or_equals | rest], lex_2, ctx)
 
   # Transforms << into :bit_shift_left
-  defp lex_second_stage([:left_arrow, :left_arrow | rest], lex_2),
-       do: lex_second_stage([:bit_shift_left | rest], lex_2)
+  defp lex_second_stage([:left_arrow, :left_arrow | rest], lex_2, ctx),
+       do: lex_second_stage([:bit_shift_left | rest], lex_2, ctx)
 
   # Transforms >= into :gt_or_equals
-  defp lex_second_stage([:right_arrow, :equals | rest], lex_2),
-       do: lex_second_stage([:gt_or_equals | rest], lex_2)
+  defp lex_second_stage([:right_arrow, :equals | rest], lex_2, ctx),
+       do: lex_second_stage([:gt_or_equals | rest], lex_2, ctx)
 
   # Transforms >> into :bit_shift_right
-  defp lex_second_stage([:right_arrow, :right_arrow | rest], lex_2),
-       do: lex_second_stage([:bit_shift_right | rest], lex_2)
+  defp lex_second_stage([:right_arrow, :right_arrow | rest], lex_2, ctx),
+       do: lex_second_stage([:bit_shift_right | rest], lex_2, ctx)
 
   # Transforms == into :has_equality
-  defp lex_second_stage([:equals, :equals | rest], lex_2),
-       do: lex_second_stage([:has_equality | rest], lex_2)
+  defp lex_second_stage([:equals, :equals | rest], lex_2, ctx),
+       do: lex_second_stage([:has_equality | rest], lex_2, ctx)
 
   # Passthrough for all unknown sequences
-  defp lex_second_stage([word | rest], lex_2),
-       do: lex_second_stage(rest, lex_2 ++ [word])
+  defp lex_second_stage([word | rest], lex_2, ctx),
+       do: lex_second_stage(rest, lex_2 ++ [word], ctx)
 end

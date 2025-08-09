@@ -23,6 +23,16 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
     assert {:ternary, {:name, "abc"}, {:literal, 123}, {:literal, -456}} = parse_string!("abc ? 123 : -456")
   end
 
+  test "handles parenthesis" do
+    assert {:literal, 123} = parse_string!("(123)")
+    assert {:literal, float_val} = parse_string!("(-425.672e-1)")
+    assert_in_delta(float_val, -42.5672, 0.01)
+  end
+
+  test "handles basic math" do
+    assert {:literal, 200} = parse_string!("100 * (4 - 2)")
+  end
+
   def parse_string!(str) do
     str
     |> Expression.lex()

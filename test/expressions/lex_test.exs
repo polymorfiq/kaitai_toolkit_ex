@@ -15,13 +15,14 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
     assert_in_delta(a, 0.123, 0.001)
     assert_in_delta(b, 123.0, 0.001)
 
-    assert [{:float, a}, :star, {:float, b}] = Expression.lex("1.23e-1 * -1.23e2")
+    assert [{:float, a}, :star, :minus, {:float, b}] = Expression.lex("1.23e-1 * -1.23e2")
     assert_in_delta(a, 0.123, 0.001)
-    assert_in_delta(b, -123.0, 0.001)
+    assert_in_delta(b, 123.0, 0.001)
   end
 
   test "handles negative numbers" do
-    assert [{:integer, -123}, :plus, {:float, -456.789}] = Expression.lex("-1_23 + -45_6.7_8_9")
+    assert [:minus, {:integer, 123}, :plus, :minus, {:float, float_val}] = Expression.lex("-1_23 + -45_6.7_8_9")
+    assert_in_delta(float_val, 456.789, 0.01)
   end
 
   test "handles booleans" do
@@ -48,8 +49,9 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
     assert ["a", :question_mark, "b", :colon, "c"] = Expression.lex("a ? b : c")
   end
 
-  test "handles method calls" do
-    assert ["a", :dot, "method", :open_parens, {:integer, 123}, :close_parens] = Expression.lex("a.method(123)")
+  test "handles parenthesis correctly" do
+    assert ["a", :dot, "method", {:parens, [{:integer, 123}]}] = Expression.lex("a.method(123)")
+    assert ["a", :dot, "method", {:parens, [{:integer, 123}, :star, {:parens, [{:integer, 456}, :minus, {:integer, 234}]}]}] = Expression.lex("a.method(123 * (456 - 234))")
   end
 
   test "handles arrows" do
