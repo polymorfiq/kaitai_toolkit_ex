@@ -1,6 +1,5 @@
 defmodule KaitaiToolkitTest.Expressions.LexTest do
   use ExUnit.Case
-  doctest KaitaiToolkit.Ksy.Expression
   alias KaitaiToolkit.Ksy.Expression
 
   test "parses a basic sentence" do
@@ -66,17 +65,21 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
   end
 
   test "handles single quotes" do
-    assert [:single_quote, {:integer, 1}, :single_quote] = Expression.lex("'1'")
-    assert [:single_quote, "abc", :single_quote] = Expression.lex("'abc'")
+    assert [{:string, "1"}] = Expression.lex("'1'")
+    assert [{:string, "abc"}] = Expression.lex("'abc'")
   end
 
   test "handles double quotes" do
-    assert [:double_quote, {:integer, 1}, :double_quote] = Expression.lex(~s|"1"|)
-    assert [:double_quote, "abc", :double_quote] = Expression.lex(~s|"abc"|)
+    assert [{:string, "1"}] = Expression.lex(~s|"1"|)
+    assert [{:string, "abc"}] = Expression.lex(~s|"abc"|)
   end
 
-  test "handles backslashes" do
-    assert [:double_quote, :backslash, "a", :backslash, "b", :double_quote] = Expression.lex(~s|"\\a\\b"|)
+  test "single quotes ignore backslashes" do
+    assert [{:string, ~s|app\\"le"\\np"i"e|}] = Expression.lex(~s|'app\\"le"\\np"i"e'|)
+  end
+
+  test "double quotes interpret backslashes" do
+    assert [{:string, ~s|app"le"\np"i"e|}] = Expression.lex(~s|"app\\"le\\"\\np\\"i\\"e"|)
   end
 
   test "handles private variables" do

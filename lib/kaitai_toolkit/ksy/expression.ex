@@ -1,184 +1,261 @@
 defmodule KaitaiToolkit.Ksy.Expression do
-  @spec lex(binary(), binary(), [binary()]) :: [binary()]
-  def lex(str, word \\ <<>>, lexed \\ [])
-  def lex(<<>>, <<>>, lexed), do: lex_second_stage(lexed)
-  def lex(<<>>, word, lexed), do: lex(<<>>, <<>>, lexed ++ [normalize_word(word)])
+  @spec parse(lexed :: [term()], context :: map()) :: tuple()
+  def parse(lexed, context \\ %{})
+  def parse([cond_expr, :question_mark, true_expr, :colon, false_expr], ctx) do
+    {:ternary, parse([cond_expr], ctx), parse([true_expr], ctx), parse([false_expr], ctx)}
+  end
 
-  def lex(<<char::binary-size(1), expr_str::binary>>, word, lexed) do
+  def parse([{:integer, num}], _), do: {:literal, num}
+  def parse([{:float, num}], _), do: {:literal, num}
+  def parse([:io], _) , do: {:meta, :io}
+  def parse([:root], _) , do: {:meta, :root}
+  def parse([:parent], _) , do: {:meta, :parent}
+  def parse([name], _) when is_binary(name), do: {:name, name}
+  def parse(lexed, _), do: {:unknown, lexed}
+
+  @spec lex(str :: binary(), curr_word :: binary(), lexed :: [binary()], context :: map()) :: [term()]
+  def lex(str, word \\ <<>>, lexed \\ [], context \\ %{in_single_string: false, in_double_string: false})
+  def lex(<<>>, <<>>, lexed, _), do: lex_second_stage(lexed)
+  def lex(<<>>, word, lexed, ctx), do: lex(<<>>, <<>>, lexed ++ [normalize_word(word)], ctx)
+
+  def lex(<<char::binary-size(1), expr_str::binary>>, word, lexed, ctx) do
     cond do
+      ctx.in_single_string && char == "'" ->
+        lex(expr_str, <<>>, lexed ++ [{:string, word}], %{ctx | in_single_string: false})
+
+      ctx.in_double_string && char == "\"" ->
+        lex(expr_str, <<>>, lexed ++ [{:string, word}], %{ctx | in_double_string: false})
+
+      ctx.in_double_string && char == "\\" ->
+        # In the middle of a string - replace with escaped character
+        <<escaped::binary-size(1), expr_str::binary>> = expr_str
+
+        {char, expr_str} = cond do
+          escaped == "a" -> {"\a", expr_str}
+          escaped == "b" -> {"\b", expr_str}
+          escaped == "t" -> {"\t", expr_str}
+          escaped == "n" -> {"\n", expr_str}
+          escaped == "v" -> {"\v", expr_str}
+          escaped == "f" -> {"\f", expr_str}
+          escaped == "r" -> {"\r", expr_str}
+          escaped == "e" -> {"\e", expr_str}
+          escaped == "\"" -> {"\"", expr_str}
+          escaped == "'" -> {"'", expr_str}
+          escaped == "\\\\" -> {"\\", expr_str}
+          escaped == "u" -> {:unicode_code_point, "\\#{escaped}" <> expr_str}
+          Regex.match?(~r|^[0-9]$|, escaped) -> {:ascii, "\\#{escaped}" <> expr_str}
+        end
+
+        {char, expr_str} = case {char, expr_str} do
+          {:ascii, expr_str} ->
+            [_, ascii_code_str, expr_str] = Regex.run(~r|^\\([0-9]{1, 3})(.*)|, expr_str)
+            ascii_code = String.to_integer(ascii_code_str)
+            {<<ascii_code>>, expr_str}
+
+          {:unicode_code_point, expr_str} ->
+            [_, utf_hex_str, expr_str] = Regex.run(~r|^\\u([0-9a-fA-F]{4})(.*)|, expr_str)
+            {hex_code, ""} = Integer.parse(utf_hex_str)
+            {:unicode.characters_to_binary(<<hex_code::integer-16>>, {:utf16, :big}), expr_str}
+
+          _ ->
+            {char, expr_str}
+        end
+
+        lex(expr_str, word <> char, lexed, ctx)
+
+      ctx.in_double_string ->
+        # In the middle of a string - just interpret the character literally
+        lex(expr_str, word <> char, lexed, ctx)
+
+      ctx.in_single_string ->
+        # In the middle of a string - just interpret the character literally
+        lex(expr_str, word <> char, lexed, ctx)
+
       Regex.match?(~r|^[\s]+$|, char) && String.length(word) > 0 ->
         # Hit Whitespace - we have finished current word
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word)])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word)], ctx)
 
       Regex.match?(~r|^[\s]+$|, char) && String.length(word) == 0 ->
         # Consecutive Whitespace - ignore it
-        lex(expr_str, word, lexed)
+        lex(expr_str, word, lexed, ctx)
+
+      char == "'" && String.length(word) > 0 ->
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word)], %{ctx | in_single_string: true})
+
+      char == "'" && String.length(word) == 0 ->
+        lex(expr_str, word, lexed, %{ctx | in_single_string: true})
+
+      char == "\"" && String.length(word) > 0 ->
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word)], %{ctx | in_double_string: true})
+
+      char == "\"" && String.length(word) == 0 ->
+        lex(expr_str, word, lexed, %{ctx | in_double_string: true})
 
       char == "[" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :open_square_bracket])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :open_square_bracket], ctx)
 
       char == "[" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:open_square_bracket])
+        lex(expr_str, word, lexed ++ [:open_square_bracket], ctx)
 
       char == "]" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :close_square_bracket])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :close_square_bracket], ctx)
 
       char == "]" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:close_square_bracket])
+        lex(expr_str, word, lexed ++ [:close_square_bracket], ctx)
 
       char == "(" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :open_parens])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :open_parens], ctx)
 
       char == "(" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:open_parens])
+        lex(expr_str, word, lexed ++ [:open_parens], ctx)
 
       char == ")" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :close_parens])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :close_parens], ctx)
 
       char == ")" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:close_parens])
+        lex(expr_str, word, lexed ++ [:close_parens], ctx)
 
       char == "+" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :plus])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :plus], ctx)
 
       char == "+" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:plus])
+        lex(expr_str, word, lexed ++ [:plus], ctx)
 
       char == "-" && Regex.match?(~r|^[\-0-9\_\.e]+$|, word) ->
         # '-' in the middle of a scientific notation. It is part of the number
-        lex(expr_str, word <> "-", lexed)
+        lex(expr_str, word <> "-", lexed, ctx)
 
       char == "-" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :minus])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :minus], ctx)
 
       char == "-" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:minus])
+        lex(expr_str, word, lexed ++ [:minus], ctx)
 
       char == "*" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :star])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :star], ctx)
 
       char == "*" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:star])
+        lex(expr_str, word, lexed ++ [:star], ctx)
 
       char == "/" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :slash])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :slash], ctx)
 
       char == "/" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:slash])
+        lex(expr_str, word, lexed ++ [:slash], ctx)
 
       char == "%" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :percent])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :percent], ctx)
 
       char == "%" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:percent])
+        lex(expr_str, word, lexed ++ [:percent], ctx)
 
       char == "!" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :exclamation])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :exclamation], ctx)
 
       char == "!" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:exclamation])
+        lex(expr_str, word, lexed ++ [:exclamation], ctx)
 
       char == "&" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :ampersand])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :ampersand], ctx)
 
       char == "&" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:ampersand])
+        lex(expr_str, word, lexed ++ [:ampersand], ctx)
 
       char == "?" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :question_mark])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :question_mark], ctx)
 
       char == "?" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:question_mark])
+        lex(expr_str, word, lexed ++ [:question_mark], ctx)
 
       char == ":" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :colon])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :colon], ctx)
 
       char == ":" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:colon])
+        lex(expr_str, word, lexed ++ [:colon], ctx)
 
       char == "|" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :pipe])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :pipe], ctx)
 
       char == "|" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:pipe])
+        lex(expr_str, word, lexed ++ [:pipe], ctx)
 
       char == "^" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :caret])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :caret], ctx)
 
       char == "^" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:caret])
+        lex(expr_str, word, lexed ++ [:caret], ctx)
 
       char == "<" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :left_arrow])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :left_arrow], ctx)
 
       char == "<" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:left_arrow])
+        lex(expr_str, word, lexed ++ [:left_arrow], ctx)
 
       char == ">" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :right_arrow])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :right_arrow], ctx)
 
       char == ">" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:right_arrow])
+        lex(expr_str, word, lexed ++ [:right_arrow], ctx)
 
       char == "=" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :equals])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :equals], ctx)
 
       char == "=" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:equals])
+        lex(expr_str, word, lexed ++ [:equals], ctx)
 
       char == "," && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :comma])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :comma], ctx)
 
       char == "," && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:comma])
+        lex(expr_str, word, lexed ++ [:comma], ctx)
 
       char == "\\" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :backslash])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :backslash], ctx)
 
       char == "\\" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:backslash])
+        lex(expr_str, word, lexed ++ [:backslash], ctx)
 
       char == "'" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :single_quote])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :single_quote], ctx)
 
       char == "'" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:single_quote])
+        lex(expr_str, word, lexed ++ [:single_quote], ctx)
 
       char == "\"" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :double_quote])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :double_quote], ctx)
 
       char == "\"" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:double_quote])
+        lex(expr_str, word, lexed ++ [:double_quote], ctx)
 
       char == "_" && Regex.match?(~r|^[\-0-9\_\.]+$|, word) ->
         # '_' in the middle of a number. Easier to read. Ignore it
-        lex(expr_str, word, lexed)
+        lex(expr_str, word, lexed, ctx)
 
       char == "_" && Regex.match?(~r|^0b[01]+$|, word) ->
         # '_' in the middle of a binary number. Easier to read. Ignore it
-        lex(expr_str, word, lexed)
+        lex(expr_str, word, lexed, ctx)
 
       char == "_" && Regex.match?(~r|^0o[01]+$|, word) ->
         # '_' in the middle of an octal number. Easier to read. Ignore it
-        lex(expr_str, word, lexed)
+        lex(expr_str, word, lexed, ctx)
 
       char == "_" && Regex.match?(~r|^0x[01]+$|, word) ->
         # '_' in the middle of a hex number. Easier to read. Ignore it
-        lex(expr_str, word, lexed)
+        lex(expr_str, word, lexed, ctx)
 
       char == "." && Regex.match?(~r|^[\-0-9\_\.]+$|, word) ->
         # '.' in the middle of a number. It is part of the number.
-        lex(expr_str, word <> ".", lexed)
+        lex(expr_str, word <> ".", lexed, ctx)
 
       char == "." && String.length(word) > 0 ->
         # '.' not in the middle of a number - it is special
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :dot])
+        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :dot], ctx)
 
       char == "." && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:dot])
+        lex(expr_str, word, lexed ++ [:dot], ctx)
 
       true ->
-        lex(expr_str, word <> char, lexed)
+        lex(expr_str, word <> char, lexed, ctx)
     end
   end
 
