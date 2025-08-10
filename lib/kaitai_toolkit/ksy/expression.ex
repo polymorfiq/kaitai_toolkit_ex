@@ -1,109 +1,38 @@
 defmodule KaitaiToolkit.Ksy.Expression do
-  @spec parse(lexed :: [term()], context :: map()) :: tuple()
-  def parse(lexed, context \\ %{})
+  #
+  # lex
+  # The first stage of lexing transforms a list of characters into a stream of words. It also finds and segments string literals.
+  # The second stage of lexing combines known multi-word combinations, into their more semantic forms. It also finds and segments Parenthesis and square brackets.
+  #
 
-  def parse([cond_expr, :question_mark, true_expr, :colon | false_expr], ctx) do
-    [{:ternary, parse([cond_expr], ctx), parse([true_expr], ctx), parse(false_expr, ctx)}]
-    |> parse(ctx)
-  end
+  @spec lex(chars :: binary()) :: [term()]
+  def lex(chars), do: chars |> lex_first_stage() |> lex_second_stage()
 
-  def parse([some_expr, :plus, other_expr], ctx) do
-    [{:add, parse([some_expr], ctx), parse([other_expr], ctx)}] |> parse(ctx)
-  end
+  #
+  # lex_first_stage
+  # Takes a stream of characters and transforms them into their semantic counterparts. Detects and preserves strings.
+  #
 
-  def parse([:minus, some_expr], ctx) do
-    [{:negative, parse([some_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([obj, :dot, method_name, {:parens, args}], ctx) do
-    [
-      {:method_call, parse([obj], ctx), parse([method_name], ctx),
-       {:parens, parse_expr_list(args, ctx)}}
-    ]
-    |> parse(ctx)
-  end
-
-  def parse([obj, :dot, prop], ctx) do
-    [{:prop_get, parse([obj], ctx), parse([prop], ctx)}] |> parse(ctx)
-  end
-
-  def parse([some_expr, :minus, other_expr], ctx) do
-    [{:subtract, parse([some_expr], ctx), parse([other_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([some_expr, :slash, other_expr], ctx) do
-    [{:divide, parse([some_expr], ctx), parse([other_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([some_expr, :star, other_expr], ctx) do
-    [{:multiply, parse([some_expr], ctx), parse([other_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([some_expr, :percent, other_expr], ctx) do
-    [{:modulo, parse([some_expr], ctx), parse([other_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([some_expr, :has_equality, other_expr], ctx) do
-    [{:equals, parse([some_expr], ctx), parse([other_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([:not, other_expr], ctx) do
-    [{:logical_not, parse([other_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([some_expr, :and, other_expr], ctx) do
-    [{:logical_and, parse([some_expr], ctx), parse([other_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([some_expr, :or, other_expr], ctx) do
-    [{:logical_or, parse([some_expr], ctx), parse([other_expr], ctx)}] |> parse(ctx)
-  end
-
-  def parse([{:integer, num}], ctx), do: [{:literal, num}] |> parse(ctx)
-  def parse([{:float, num}], ctx), do: [{:literal, num}] |> parse(ctx)
-  def parse([{:negative, {:integer, num}}], ctx), do: [{:literal, -num}] |> parse(ctx)
-  def parse([{:negative, {:float, num}}], ctx), do: [{:literal, -num}] |> parse(ctx)
-  def parse([:io], ctx), do: [{:meta, :io}] |> parse(ctx)
-  def parse([:root], ctx), do: [{:meta, :root}] |> parse(ctx)
-  def parse([:parent], ctx), do: [{:meta, :parent}] |> parse(ctx)
-  def parse([{:brackets, exprs}], ctx), do: [{:list, parse_expr_list(exprs, ctx)}] |> parse(ctx)
-  def parse([{:parens, {:literal, literal}}], ctx), do: [{:literal, literal}] |> parse(ctx)
-  def parse([{:parens, expr}], ctx), do: {:parens, parse(expr, ctx)} |> parse_second_stage(ctx)
-  def parse([name], ctx) when is_binary(name), do: [{:name, name}] |> parse(ctx)
-  def parse([lexed], ctx), do: lexed |> parse_second_stage(ctx)
-  def parse([], _ctx), do: :empty
-
-  defp parse_second_stage(parsed, _ctx), do: parsed
-
-  defp parse_expr_list(exprs, ctx, parsed \\ [])
-
-  defp parse_expr_list([expr, :comma | remaining], ctx, parsed) do
-    parse_expr_list(remaining, ctx, parsed ++ [parse([expr], ctx)])
-  end
-
-  defp parse_expr_list([expr], ctx, parsed), do: parsed ++ [parse([expr], ctx)]
-  defp parse_expr_list([], _ctx, parsed), do: parsed
-
-  @spec lex(str :: binary(), curr_word :: binary(), lexed :: [binary()], context :: map()) :: [
+  @spec lex_first_stage(str :: binary(), curr_word :: binary(), lexed :: [binary()], context :: map()) :: [
           term()
         ]
-  def lex(
+  defp lex_first_stage(
         str,
         word \\ <<>>,
         lexed \\ [],
         context \\ %{in_single_string: false, in_double_string: false}
       )
 
-  def lex(<<>>, <<>>, lexed, _), do: lex_second_stage(lexed)
-  def lex(<<>>, word, lexed, ctx), do: lex(<<>>, <<>>, lexed ++ [normalize_word(word)], ctx)
+  defp lex_first_stage(<<>>, <<>>, lexed, _), do: lexed
+  defp lex_first_stage(<<>>, word, lexed, ctx), do: lex_first_stage(<<>>, <<>>, lexed ++ [normalize_word(word)], ctx)
 
-  def lex(<<char::binary-size(1), expr_str::binary>>, word, lexed, ctx) do
+  defp lex_first_stage(<<char::binary-size(1), expr_str::binary>>, word, lexed, ctx) do
     cond do
       ctx.in_single_string && char == "'" ->
-        lex(expr_str, <<>>, lexed ++ [{:string, word}], %{ctx | in_single_string: false})
+        lex_first_stage(expr_str, <<>>, lexed ++ [{:string, word}], %{ctx | in_single_string: false})
 
       ctx.in_double_string && char == "\"" ->
-        lex(expr_str, <<>>, lexed ++ [{:string, word}], %{ctx | in_double_string: false})
+        lex_first_stage(expr_str, <<>>, lexed ++ [{:string, word}], %{ctx | in_double_string: false})
 
       ctx.in_double_string && char == "\\" ->
         # In the middle of a string - replace with escaped character
@@ -142,201 +71,201 @@ defmodule KaitaiToolkit.Ksy.Expression do
               {char, expr_str}
           end
 
-        lex(expr_str, word <> char, lexed, ctx)
+        lex_first_stage(expr_str, word <> char, lexed, ctx)
 
       ctx.in_double_string ->
         # In the middle of a string - just interpret the character literally
-        lex(expr_str, word <> char, lexed, ctx)
+        lex_first_stage(expr_str, word <> char, lexed, ctx)
 
       ctx.in_single_string ->
         # In the middle of a string - just interpret the character literally
-        lex(expr_str, word <> char, lexed, ctx)
+        lex_first_stage(expr_str, word <> char, lexed, ctx)
 
       Regex.match?(~r|^[\s]+$|, char) && String.length(word) > 0 ->
         # Hit Whitespace - we have finished current word
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word)], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word)], ctx)
 
       Regex.match?(~r|^[\s]+$|, char) && String.length(word) == 0 ->
         # Consecutive Whitespace - ignore it
-        lex(expr_str, word, lexed, ctx)
+        lex_first_stage(expr_str, word, lexed, ctx)
 
       char == "'" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word)], %{ctx | in_single_string: true})
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word)], %{ctx | in_single_string: true})
 
       char == "'" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed, %{ctx | in_single_string: true})
+        lex_first_stage(expr_str, word, lexed, %{ctx | in_single_string: true})
 
       char == "\"" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word)], %{ctx | in_double_string: true})
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word)], %{ctx | in_double_string: true})
 
       char == "\"" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed, %{ctx | in_double_string: true})
+        lex_first_stage(expr_str, word, lexed, %{ctx | in_double_string: true})
 
       char == "[" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :open_square_bracket], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :open_square_bracket], ctx)
 
       char == "[" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:open_square_bracket], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:open_square_bracket], ctx)
 
       char == "]" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :close_square_bracket], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :close_square_bracket], ctx)
 
       char == "]" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:close_square_bracket], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:close_square_bracket], ctx)
 
       char == "(" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :open_parens], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :open_parens], ctx)
 
       char == "(" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:open_parens], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:open_parens], ctx)
 
       char == ")" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :close_parens], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :close_parens], ctx)
 
       char == ")" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:close_parens], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:close_parens], ctx)
 
       char == "+" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :plus], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :plus], ctx)
 
       char == "+" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:plus], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:plus], ctx)
 
       char == "-" && Regex.match?(~r|^[\-0-9\_\.e]+$|, word) ->
         # '-' in the middle of a scientific notation. It is part of the number
-        lex(expr_str, word <> "-", lexed, ctx)
+        lex_first_stage(expr_str, word <> "-", lexed, ctx)
 
       char == "-" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :minus], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :dash], ctx)
 
       char == "-" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:minus], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:dash], ctx)
 
       char == "*" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :star], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :star], ctx)
 
       char == "*" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:star], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:star], ctx)
 
       char == "/" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :slash], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :slash], ctx)
 
       char == "/" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:slash], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:slash], ctx)
 
       char == "%" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :percent], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :percent], ctx)
 
       char == "%" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:percent], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:percent], ctx)
 
       char == "!" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :exclamation], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :exclamation], ctx)
 
       char == "!" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:exclamation], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:exclamation], ctx)
 
       char == "&" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :ampersand], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :ampersand], ctx)
 
       char == "&" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:ampersand], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:ampersand], ctx)
 
       char == "?" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :question_mark], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :question_mark], ctx)
 
       char == "?" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:question_mark], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:question_mark], ctx)
 
       char == ":" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :colon], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :colon], ctx)
 
       char == ":" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:colon], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:colon], ctx)
 
       char == "|" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :pipe], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :pipe], ctx)
 
       char == "|" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:pipe], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:pipe], ctx)
 
       char == "^" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :caret], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :caret], ctx)
 
       char == "^" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:caret], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:caret], ctx)
 
       char == "<" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :left_arrow], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :left_arrow], ctx)
 
       char == "<" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:left_arrow], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:left_arrow], ctx)
 
       char == ">" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :right_arrow], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :right_arrow], ctx)
 
       char == ">" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:right_arrow], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:right_arrow], ctx)
 
       char == "=" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :equals], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :equals], ctx)
 
       char == "=" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:equals], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:equals], ctx)
 
       char == "," && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :comma], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :comma], ctx)
 
       char == "," && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:comma], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:comma], ctx)
 
       char == "\\" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :backslash], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :backslash], ctx)
 
       char == "\\" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:backslash], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:backslash], ctx)
 
       char == "'" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :single_quote], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :single_quote], ctx)
 
       char == "'" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:single_quote], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:single_quote], ctx)
 
       char == "\"" && String.length(word) > 0 ->
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :double_quote], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :double_quote], ctx)
 
       char == "\"" && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:double_quote], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:double_quote], ctx)
 
       char == "_" && Regex.match?(~r|^[\-0-9\_\.]+$|, word) ->
         # '_' in the middle of a number. Easier to read. Ignore it
-        lex(expr_str, word, lexed, ctx)
+        lex_first_stage(expr_str, word, lexed, ctx)
 
       char == "_" && Regex.match?(~r|^0b[01]+$|, word) ->
         # '_' in the middle of a binary number. Easier to read. Ignore it
-        lex(expr_str, word, lexed, ctx)
+        lex_first_stage(expr_str, word, lexed, ctx)
 
       char == "_" && Regex.match?(~r|^0o[01]+$|, word) ->
         # '_' in the middle of an octal number. Easier to read. Ignore it
-        lex(expr_str, word, lexed, ctx)
+        lex_first_stage(expr_str, word, lexed, ctx)
 
       char == "_" && Regex.match?(~r|^0x[01]+$|, word) ->
         # '_' in the middle of a hex number. Easier to read. Ignore it
-        lex(expr_str, word, lexed, ctx)
+        lex_first_stage(expr_str, word, lexed, ctx)
 
       char == "." && Regex.match?(~r|^[\-0-9\_\.]+$|, word) ->
         # '.' in the middle of a number. It is part of the number.
-        lex(expr_str, word <> ".", lexed, ctx)
+        lex_first_stage(expr_str, word <> ".", lexed, ctx)
 
       char == "." && String.length(word) > 0 ->
         # '.' not in the middle of a number - it is special
-        lex(expr_str, <<>>, lexed ++ [normalize_word(word), :dot], ctx)
+        lex_first_stage(expr_str, <<>>, lexed ++ [normalize_word(word), :dot], ctx)
 
       char == "." && String.length(word) == 0 ->
-        lex(expr_str, word, lexed ++ [:dot], ctx)
+        lex_first_stage(expr_str, word, lexed ++ [:dot], ctx)
 
       true ->
-        lex(expr_str, word <> char, lexed, ctx)
+        lex_first_stage(expr_str, word <> char, lexed, ctx)
     end
   end
 
@@ -407,6 +336,12 @@ defmodule KaitaiToolkit.Ksy.Expression do
     end
   end
 
+  #
+  # lex_second_stage
+  # Combines multi-word expressions into their more-semantic counterparts. Also groups expressions in parenthesis and square brackets
+  # Say for example, transforms (:exclamation + :equals) into (:not_equals)
+  #
+
   defp lex_second_stage(lexed, lex_2 \\ [], ctx \\ %{parens_depth: 0, bracket_depth: 0})
 
   defp lex_second_stage([], lex_2, %{parens_depth: depth}) when depth > 0,
@@ -470,29 +405,6 @@ defmodule KaitaiToolkit.Ksy.Expression do
     lex_second_stage(rest, new_lex_2, %{ctx | bracket_depth: ctx.bracket_depth - 1})
   end
 
-  # Clean up double negatives (--)
-  defp lex_second_stage([:minus, :minus | rest], lex_2, ctx),
-    do: lex_second_stage([:plus | rest], lex_2, ctx)
-
-  # Clean up double negatives (!!)
-  defp lex_second_stage([:exclamation, :exclamation | rest], lex_2, ctx),
-    do: lex_second_stage(rest, lex_2, ctx)
-
-  defp lex_second_stage([:not, :not | rest], lex_2, ctx),
-    do: lex_second_stage(rest, lex_2, ctx)
-
-  defp lex_second_stage([:exclamation, true | rest], lex_2, ctx),
-    do: lex_second_stage([false | rest], lex_2, ctx)
-
-  defp lex_second_stage([:not, true | rest], lex_2, ctx),
-    do: lex_second_stage([false | rest], lex_2, ctx)
-
-  defp lex_second_stage([:exclamation, false | rest], lex_2, ctx),
-    do: lex_second_stage([true | rest], lex_2, ctx)
-
-  defp lex_second_stage([:not, false | rest], lex_2, ctx),
-    do: lex_second_stage([true | rest], lex_2, ctx)
-
   # Transform != into :not_equals
   defp lex_second_stage([:exclamation, :equals | rest], lex_2, ctx),
     do: lex_second_stage([:not_equals | rest], lex_2, ctx)
@@ -513,17 +425,86 @@ defmodule KaitaiToolkit.Ksy.Expression do
   defp lex_second_stage([:right_arrow, :right_arrow | rest], lex_2, ctx),
     do: lex_second_stage([:bit_shift_right | rest], lex_2, ctx)
 
-  defp lex_second_stage([:pipe | rest], lex_2, ctx),
-    do: lex_second_stage([:bitwise_or | rest], lex_2, ctx)
-
-  defp lex_second_stage([:caret | rest], lex_2, ctx),
-    do: lex_second_stage([:bitwise_xor | rest], lex_2, ctx)
-
-  # Transforms == into :has_equality
+  # Transforms == into :is_equal
   defp lex_second_stage([:equals, :equals | rest], lex_2, ctx),
-    do: lex_second_stage([:has_equality | rest], lex_2, ctx)
+    do: lex_second_stage([:is_equal | rest], lex_2, ctx)
 
   # Passthrough for all unknown sequences
   defp lex_second_stage([word | rest], lex_2, ctx),
     do: lex_second_stage(rest, lex_2 ++ [word], ctx)
+
+
+ #
+ # parse
+ # The goal of parsing is to take a list of semantically-enriched words and transform them into an unambiguous AST
+ # The first stage of parsing groups words into semantically-equivalent tuples that helps preserve order-of-operations rules in future steps.
+ #
+
+  @spec parse(lexed :: [term()]) :: tuple()
+  def parse(lexed), do: lexed |> parse_first_stage()
+
+  @spec parse_first_stage(lexed :: [term()], context :: map()) :: tuple()
+  defp parse_first_stage(lexed, ctx \\ %{})
+  defp parse_first_stage([cond_expr, :question_mark, true_expr, :colon | false_expr], ctx) do
+    [{:ternary, parse_first_stage([cond_expr], ctx), parse_first_stage([true_expr], ctx), parse_first_stage(false_expr, ctx)}]
+    |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([some_expr, :plus, other_expr], ctx) do
+    [{:add, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([:dash, some_expr], ctx) do
+    [{:negative, parse_first_stage([some_expr], ctx)}] |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([obj, :dot, method_name, {:parens, args}], ctx) do
+    [
+      {:method_call, parse_first_stage([obj], ctx), parse_first_stage([method_name], ctx), parse_first_stage_list(args, ctx)}
+    ]
+    |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([obj, :dot, prop], ctx) do
+    [{:prop_get, parse_first_stage([obj], ctx), parse_first_stage([prop], ctx)}] |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([some_expr, :is_equal, other_expr], ctx) do
+    [{:equals, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([:not, other_expr], ctx) do
+    [{:logical_not, parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([some_expr, :and, other_expr], ctx) do
+    [{:logical_and, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([some_expr, :or, other_expr], ctx) do
+    [{:logical_or, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
+  end
+
+  defp parse_first_stage([{:integer, num}], ctx), do: [{:literal, num}] |> parse_first_stage(ctx)
+  defp parse_first_stage([{:float, num}], ctx), do: [{:literal, num}] |> parse_first_stage(ctx)
+  defp parse_first_stage([{:negative, {:integer, num}}], ctx), do: [{:literal, -num}] |> parse_first_stage(ctx)
+  defp parse_first_stage([{:negative, {:float, num}}], ctx), do: [{:literal, -num}] |> parse_first_stage(ctx)
+  defp parse_first_stage([:io], ctx), do: [{:meta, :io}] |> parse_first_stage(ctx)
+  defp parse_first_stage([:root], ctx), do: [{:meta, :root}] |> parse_first_stage(ctx)
+  defp parse_first_stage([:parent], ctx), do: [{:meta, :parent}] |> parse_first_stage(ctx)
+  defp parse_first_stage([{:brackets, items}], ctx), do: [{:array, parse_first_stage_list(items, ctx)}] |> parse_first_stage(ctx)
+  defp parse_first_stage([{:parens, {:literal, literal}}], ctx), do: [{:literal, literal}] |> parse_first_stage(ctx)
+  defp parse_first_stage([{:parens, expr}], ctx), do: {:parens, parse_first_stage(expr, ctx)}
+  defp parse_first_stage([name], ctx) when is_binary(name), do: [{:name, name}] |> parse_first_stage(ctx)
+  defp parse_first_stage([parsed], _ctx), do: parsed
+  defp parse_first_stage([], _ctx), do: :empty
+
+  defp parse_first_stage_list(exprs, ctx, parsed \\ [])
+
+  defp parse_first_stage_list([expr, :comma | remaining], ctx, parsed) do
+    parse_first_stage_list(remaining, ctx, parsed ++ [parse_first_stage([expr], ctx)])
+  end
+
+  defp parse_first_stage_list([expr], ctx, parsed), do: parsed ++ [parse_first_stage([expr], ctx)]
+  defp parse_first_stage_list([], _ctx, parsed), do: parsed
 end

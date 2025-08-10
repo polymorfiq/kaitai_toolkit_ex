@@ -31,21 +31,23 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
   end
 
   test "handles method calls" do
-    assert {:method_call, {:name, "abc"}, {:name, "method"}, {:parens, []}} =
+    assert {:method_call, {:name, "abc"}, {:name, "method"}, []} =
              parse_string!("abc.method()")
 
-    assert {:method_call, {:name, "abc"}, {:name, "method"},
-            {:parens, [{:name, "a"}, {:name, "b"}, {:name, "c"}]}} =
+    assert {:method_call, {:name, "abc"}, {:name, "method"}, [{:name, "a"}, {:name, "b"}, {:name, "c"}]} =
              parse_string!("abc.method(a, b, c)")
   end
 
   test "handles basic math" do
     assert {:multiply, {:literal, 100}, {:parens, {:subtract, {:literal, 4}, {:literal, 2}}}} =
              parse_string!("100 * (4 - 2)")
+
+    assert {:add, [{:name, "a"}, {:name, "b"}, {:name, "c"}]} =
+             parse_string!("a + b + c")
   end
 
   test "handles arrays" do
-    assert {:list,
+    assert {:array,
             [
               literal: 0x50,
               literal: 0x41,
@@ -54,6 +56,11 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
               literal: 0x2D,
               literal: 0x31
             ]} = parse_string!("[0x50, 0x41, 0x43, 0x4b, 0x2d, 0x31]")
+  end
+
+  test "handles strings" do
+    assert {:string, "Apple\nbottom\tjeans"} = parse_string!(~S|"Apple\nbottom\tjeans"|)
+    assert {:add, [{:string, "Apple\n"}, {:string, "bottom\t"}, {:string, "jeans"}]} = parse_string!(~S|"Apple\n" + "bottom\t" + "jeans"|)
   end
 
   def parse_string!(str) do

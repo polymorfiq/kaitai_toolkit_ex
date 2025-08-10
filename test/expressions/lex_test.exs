@@ -15,13 +15,13 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
     assert_in_delta(a, 0.123, 0.001)
     assert_in_delta(b, 123.0, 0.001)
 
-    assert [{:float, a}, :star, :minus, {:float, b}] = Expression.lex("1.23e-1 * -1.23e2")
+    assert [{:float, a}, :star, :dash, {:float, b}] = Expression.lex("1.23e-1 * -1.23e2")
     assert_in_delta(a, 0.123, 0.001)
     assert_in_delta(b, 123.0, 0.001)
   end
 
   test "handles negative numbers" do
-    assert [:minus, {:integer, 123}, :plus, :minus, {:float, float_val}] =
+    assert [:dash, {:integer, 123}, :plus, :dash, {:float, float_val}] =
              Expression.lex("-1_23 + -45_6.7_8_9")
 
     assert_in_delta(float_val, 456.789, 0.01)
@@ -29,28 +29,28 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
 
   test "handles booleans" do
     assert ["abc", :not_equals, true] = Expression.lex("abc != true")
-    assert ["abc", :has_equality, false] = Expression.lex("abc == false")
+    assert ["abc", :is_equal, false] = Expression.lex("abc == false")
   end
 
   test "handles bit manipulations" do
-    assert ["abc", :bit_shift_right, {:integer, 2}, :has_equality, {:integer, 128}] =
+    assert ["abc", :bit_shift_right, {:integer, 2}, :is_equal, {:integer, 128}] =
              Expression.lex("abc >> 2 == 128")
 
-    assert ["abc", :bit_shift_left, {:integer, 2}, :has_equality, {:integer, 128}] =
+    assert ["abc", :bit_shift_left, {:integer, 2}, :is_equal, {:integer, 128}] =
              Expression.lex("abc << 2 == 128")
 
-    assert ["a", :ampersand, {:integer, 1}, :has_equality, true] = Expression.lex("a & 1 == true")
+    assert ["a", :ampersand, {:integer, 1}, :is_equal, true] = Expression.lex("a & 1 == true")
 
-    assert ["a", :bitwise_or, {:integer, 1}, :has_equality, true] =
+    assert ["a", :pipe, {:integer, 1}, :is_equal, true] =
              Expression.lex("a | 1 == true")
 
-    assert ["a", :bitwise_xor, {:integer, 1}, :has_equality, true] =
+    assert ["a", :caret, {:integer, 1}, :is_equal, true] =
              Expression.lex("a ^ 1 == true")
   end
 
   test "handles logical operators" do
     assert ["a", :and, true] = Expression.lex("a and true")
-    assert ["a", :and, false] = Expression.lex("a and not true")
+    assert ["a", :and, :not, true] = Expression.lex("a and not true")
     assert ["a", :and, :not, "b"] = Expression.lex("a and not b")
     assert ["a", :or, :not, "b"] = Expression.lex("a or not b")
   end
@@ -68,7 +68,7 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
              :dot,
              "method",
              {:parens,
-              [{:integer, 123}, :star, {:parens, [{:integer, 456}, :minus, {:integer, 234}]}]}
+              [{:integer, 123}, :star, {:parens, [{:integer, 456}, :dash, {:integer, 234}]}]}
            ] = Expression.lex("a.method(123 * (456 - 234))")
   end
 
@@ -110,12 +110,12 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
     assert [:parent] = Expression.lex(~s|_parent|)
   end
 
-  test "handles negation of literals" do
-    assert [true] = Expression.lex("!false")
-    assert [false] = Expression.lex("!true")
-    assert [false] = Expression.lex("!!false")
-    assert [true] = Expression.lex("!!true")
-    assert [true] = Expression.lex("!!!false")
-    assert [false] = Expression.lex("!!!true")
+  test "handles exclamation of literals" do
+    assert [:exclamation, false] = Expression.lex("!false")
+    assert [:exclamation, true] = Expression.lex("!true")
+    assert [:exclamation, :exclamation, false] = Expression.lex("!!false")
+    assert [:exclamation, :exclamation, true] = Expression.lex("!!true")
+    assert [:exclamation, :exclamation, :exclamation, false] = Expression.lex("!!!false")
+    assert [:exclamation, :exclamation, :exclamation, true] = Expression.lex("!!!true")
   end
 end
