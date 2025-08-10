@@ -21,26 +21,36 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
   end
 
   test "handles negative numbers" do
-    assert [:minus, {:integer, 123}, :plus, :minus, {:float, float_val}] = Expression.lex("-1_23 + -45_6.7_8_9")
+    assert [:minus, {:integer, 123}, :plus, :minus, {:float, float_val}] =
+             Expression.lex("-1_23 + -45_6.7_8_9")
+
     assert_in_delta(float_val, 456.789, 0.01)
   end
 
   test "handles booleans" do
-    assert ["abc", :not_equals, :true] = Expression.lex("abc != true")
-    assert ["abc", :has_equality, :false] = Expression.lex("abc == false")
+    assert ["abc", :not_equals, true] = Expression.lex("abc != true")
+    assert ["abc", :has_equality, false] = Expression.lex("abc == false")
   end
 
   test "handles bit manipulations" do
-    assert ["abc", :bit_shift_right, {:integer, 2}, :has_equality, {:integer, 128}] = Expression.lex("abc >> 2 == 128")
-    assert ["abc", :bit_shift_left, {:integer, 2}, :has_equality, {:integer, 128}] = Expression.lex("abc << 2 == 128")
-    assert ["a", :ampersand, {:integer, 1}, :has_equality, :true] = Expression.lex("a & 1 == true")
-    assert ["a", :bitwise_or, {:integer, 1}, :has_equality, :true] = Expression.lex("a | 1 == true")
-    assert ["a", :bitwise_xor, {:integer, 1}, :has_equality, :true] = Expression.lex("a ^ 1 == true")
+    assert ["abc", :bit_shift_right, {:integer, 2}, :has_equality, {:integer, 128}] =
+             Expression.lex("abc >> 2 == 128")
+
+    assert ["abc", :bit_shift_left, {:integer, 2}, :has_equality, {:integer, 128}] =
+             Expression.lex("abc << 2 == 128")
+
+    assert ["a", :ampersand, {:integer, 1}, :has_equality, true] = Expression.lex("a & 1 == true")
+
+    assert ["a", :bitwise_or, {:integer, 1}, :has_equality, true] =
+             Expression.lex("a | 1 == true")
+
+    assert ["a", :bitwise_xor, {:integer, 1}, :has_equality, true] =
+             Expression.lex("a ^ 1 == true")
   end
 
   test "handles logical operators" do
-    assert ["a", :and, :true] = Expression.lex("a and true")
-    assert ["a", :and, :false] = Expression.lex("a and not true")
+    assert ["a", :and, true] = Expression.lex("a and true")
+    assert ["a", :and, false] = Expression.lex("a and not true")
     assert ["a", :and, :not, "b"] = Expression.lex("a and not b")
     assert ["a", :or, :not, "b"] = Expression.lex("a or not b")
   end
@@ -50,8 +60,16 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
   end
 
   test "handles parenthesis correctly" do
+    assert ["a", :dot, "method", {:parens, []}] = Expression.lex("a.method()")
     assert ["a", :dot, "method", {:parens, [{:integer, 123}]}] = Expression.lex("a.method(123)")
-    assert ["a", :dot, "method", {:parens, [{:integer, 123}, :star, {:parens, [{:integer, 456}, :minus, {:integer, 234}]}]}] = Expression.lex("a.method(123 * (456 - 234))")
+
+    assert [
+             "a",
+             :dot,
+             "method",
+             {:parens,
+              [{:integer, 123}, :star, {:parens, [{:integer, 456}, :minus, {:integer, 234}]}]}
+           ] = Expression.lex("a.method(123 * (456 - 234))")
   end
 
   test "handles arrows" do
@@ -62,8 +80,9 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
   end
 
   test "handles brackets" do
-    assert [:open_square_bracket, {:integer, 1}, :close_square_bracket] = Expression.lex("[1]")
-    assert [:open_square_bracket, {:integer, 1}, :comma, "abc", :comma, {:integer, 2}, :close_square_bracket] = Expression.lex("[1, abc, 2]")
+    assert [{:brackets, [{:integer, 1}]}] = Expression.lex("[1]")
+
+    assert [{:brackets, [{:integer, 1}, :comma, "abc", :comma, {:integer, 2}]}] = Expression.lex("[1, abc, 2]")
   end
 
   test "handles single quotes" do
@@ -91,11 +110,11 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
   end
 
   test "handles negation of literals" do
-    assert [:true] = Expression.lex("!false")
-    assert [:false] = Expression.lex("!true")
-    assert [:false] = Expression.lex("!!false")
-    assert [:true] = Expression.lex("!!true")
-    assert [:true] = Expression.lex("!!!false")
-    assert [:false] = Expression.lex("!!!true")
+    assert [true] = Expression.lex("!false")
+    assert [false] = Expression.lex("!true")
+    assert [false] = Expression.lex("!!false")
+    assert [true] = Expression.lex("!!true")
+    assert [true] = Expression.lex("!!!false")
+    assert [false] = Expression.lex("!!!true")
   end
 end

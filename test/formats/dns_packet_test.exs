@@ -7,14 +7,21 @@ defmodule KaitaiToolkitTest.Formats.DnsPacketTest do
       use KaitaiToolkit.Struct, ksy: "#{:code.priv_dir(:kaitai_toolkit)}/dns_packet.ksy"
     end
 
-    io = binary_stream(<<
-      123::unsigned-integer-16, # Transaction ID
-      0::unsigned-integer-16, # Packet Flags
-      0::unsigned-integer-16, # qdcount
-      0::unsigned-integer-16, # ancount
-      0::unsigned-integer-16, # nscount
-      0::unsigned-integer-16, # arcount
-    >>)
+    io =
+      binary_stream(<<
+        # Transaction ID
+        123::unsigned-integer-16,
+        # Packet Flags
+        0::unsigned-integer-16,
+        # qdcount
+        0::unsigned-integer-16,
+        # ancount
+        0::unsigned-integer-16,
+        # nscount
+        0::unsigned-integer-16,
+        # arcount
+        0::unsigned-integer-16
+      >>)
 
     packet = DnsPacket.read!(io)
     assert packet.transaction_id == 123

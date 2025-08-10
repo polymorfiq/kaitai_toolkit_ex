@@ -15,7 +15,7 @@ defmodule KaitaiToolkit.Struct do
       end
 
     generated = Generation.generate(ksy, root: __CALLER__.module)
-#    generated |> Macro.to_string() |> Code.format_string!() |> IO.puts()
+    #    generated |> Macro.to_string() |> Code.format_string!() |> IO.puts()
 
     generated
   end

@@ -20,7 +20,8 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
   end
 
   test "handles ternary expressions" do
-    assert {:ternary, {:name, "abc"}, {:literal, 123}, {:negative, {:literal, 456}}} = parse_string!("abc ? 123 : -456")
+    assert {:ternary, {:name, "abc"}, {:literal, 123}, {:negative, {:literal, 456}}} =
+             parse_string!("abc ? 123 : -456")
   end
 
   test "handles parenthesis" do
@@ -29,8 +30,18 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
     assert_in_delta(float_val, 42.5672, 0.01)
   end
 
+  test "handles method calls" do
+    assert {:method_call, {:name, "abc"}, {:name, "method"}, {:parens, :empty}} = parse_string!("abc.method()")
+    assert {:method_call, {:name, "abc"}, {:name, "method"}, {:parens, [{:name, "a"}, {:name, "b"}, {:name, "c"}]}} = parse_string!("abc.method(a, b, c)")
+  end
+
   test "handles basic math" do
-    assert {:multiply, {:literal, 100}, {:parens, {:subtract, {:literal, 4}, {:literal, 2}}}} = parse_string!("100 * (4 - 2)")
+    assert {:multiply, {:literal, 100}, {:parens, {:subtract, {:literal, 4}, {:literal, 2}}}} =
+             parse_string!("100 * (4 - 2)")
+  end
+
+  test "handles arrays" do
+    assert true = parse_string!("[0x50, 0x41, 0x43, 0x4b, 0x2d, 0x31]")
   end
 
   def parse_string!(str) do
