@@ -66,6 +66,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
   def parse([:io], ctx), do: [{:meta, :io}] |> parse(ctx)
   def parse([:root], ctx), do: [{:meta, :root}] |> parse(ctx)
   def parse([:parent], ctx), do: [{:meta, :parent}] |> parse(ctx)
+  def parse([{:brackets, exprs}], ctx), do: [{:list, parse_expr_list(exprs, ctx)}] |> parse(ctx)
   def parse([{:parens, {:literal, literal}}], ctx), do: [{:literal, literal}] |> parse(ctx)
   def parse([{:parens, expr}], ctx), do: {:parens, parse(expr, ctx)} |> parse_second_stage(ctx)
   def parse([name], ctx) when is_binary(name), do: [{:name, name}] |> parse(ctx)
@@ -81,7 +82,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
   end
 
   defp parse_expr_list([expr], ctx, parsed), do: parsed ++ [parse([expr], ctx)]
-  defp parse_expr_list([], _ctx, parsed), do: :empty
+  defp parse_expr_list([], _ctx, parsed), do: parsed
 
   @spec lex(str :: binary(), curr_word :: binary(), lexed :: [binary()], context :: map()) :: [
           term()
