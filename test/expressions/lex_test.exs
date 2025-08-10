@@ -34,8 +34,8 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
     assert ["abc", :bit_shift_right, {:integer, 2}, :has_equality, {:integer, 128}] = Expression.lex("abc >> 2 == 128")
     assert ["abc", :bit_shift_left, {:integer, 2}, :has_equality, {:integer, 128}] = Expression.lex("abc << 2 == 128")
     assert ["a", :ampersand, {:integer, 1}, :has_equality, :true] = Expression.lex("a & 1 == true")
-    assert ["a", :pipe, {:integer, 1}, :has_equality, :true] = Expression.lex("a | 1 == true")
-    assert ["a", :caret, {:integer, 1}, :has_equality, :true] = Expression.lex("a ^ 1 == true")
+    assert ["a", :bitwise_or, {:integer, 1}, :has_equality, :true] = Expression.lex("a | 1 == true")
+    assert ["a", :bitwise_xor, {:integer, 1}, :has_equality, :true] = Expression.lex("a ^ 1 == true")
   end
 
   test "handles logical operators" do

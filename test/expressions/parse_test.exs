@@ -4,7 +4,7 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
 
   test "handles basic integers" do
     assert {:literal, 123} = parse_string!("123")
-    assert {:literal, -123} = parse_string!("-123")
+    assert {:negative, {:literal, 123}} = parse_string!("-123")
     assert {:literal, 204} = parse_string!("0xCC")
   end
 
@@ -20,17 +20,17 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
   end
 
   test "handles ternary expressions" do
-    assert {:ternary, {:name, "abc"}, {:literal, 123}, {:literal, -456}} = parse_string!("abc ? 123 : -456")
+    assert {:ternary, {:name, "abc"}, {:literal, 123}, {:negative, {:literal, 456}}} = parse_string!("abc ? 123 : -456")
   end
 
   test "handles parenthesis" do
-    assert {:literal, 123} = parse_string!("(123)")
-    assert {:literal, float_val} = parse_string!("(-425.672e-1)")
-    assert_in_delta(float_val, -42.5672, 0.01)
+    assert {:parens, {:literal, 123}} = parse_string!("(123)")
+    assert {:parens, {:negative, {:literal, float_val}}} = parse_string!("(-425.672e-1)")
+    assert_in_delta(float_val, 42.5672, 0.01)
   end
 
   test "handles basic math" do
-    assert {:literal, 200} = parse_string!("100 * (4 - 2)")
+    assert {:multiply, {:literal, 100}, {:parens, {:subtract, {:literal, 4}, {:literal, 2}}}} = parse_string!("100 * (4 - 2)")
   end
 
   def parse_string!(str) do
