@@ -16,7 +16,11 @@ defmodule KaitaiToolkit.Ksy.Expression do
   end
 
   def parse([obj, :dot, method_name, {:parens, args}], ctx) do
-    [{:method_call, parse([obj], ctx), parse([method_name], ctx), {:parens, parse_expr_list(args, ctx)}}] |> parse(ctx)
+    [
+      {:method_call, parse([obj], ctx), parse([method_name], ctx),
+       {:parens, parse_expr_list(args, ctx)}}
+    ]
+    |> parse(ctx)
   end
 
   def parse([obj, :dot, prop], ctx) do
@@ -71,6 +75,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
   defp parse_second_stage(parsed, _ctx), do: parsed
 
   defp parse_expr_list(exprs, ctx, parsed \\ [])
+
   defp parse_expr_list([expr, :comma | remaining], ctx, parsed) do
     parse_expr_list(remaining, ctx, parsed ++ [parse([expr], ctx)])
   end
@@ -441,12 +446,13 @@ defmodule KaitaiToolkit.Ksy.Expression do
   defp lex_second_stage([:open_square_bracket | rest], lex_2, ctx) do
     lex_second_stage(rest, lex_2 ++ [{:open_square_bracket, ctx.bracket_depth + 1}], %{
       ctx
-    | bracket_depth: ctx.bracket_depth + 1
+      | bracket_depth: ctx.bracket_depth + 1
     })
   end
 
   defp lex_second_stage([:close_square_bracket | rest], lex_2, ctx) do
-    split_by_parens_opening = Enum.split_while(lex_2, &(&1 != {:open_square_bracket, ctx.bracket_depth}))
+    split_by_parens_opening =
+      Enum.split_while(lex_2, &(&1 != {:open_square_bracket, ctx.bracket_depth}))
 
     new_lex_2 =
       case split_by_parens_opening do

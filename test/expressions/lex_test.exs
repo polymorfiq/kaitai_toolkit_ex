@@ -82,7 +82,8 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
   test "handles brackets" do
     assert [{:brackets, [{:integer, 1}]}] = Expression.lex("[1]")
 
-    assert [{:brackets, [{:integer, 1}, :comma, "abc", :comma, {:integer, 2}]}] = Expression.lex("[1, abc, 2]")
+    assert [{:brackets, [{:integer, 1}, :comma, "abc", :comma, {:integer, 2}]}] =
+             Expression.lex("[1, abc, 2]")
   end
 
   test "handles single quotes" do

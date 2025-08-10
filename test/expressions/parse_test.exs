@@ -31,8 +31,12 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
   end
 
   test "handles method calls" do
-    assert {:method_call, {:name, "abc"}, {:name, "method"}, {:parens, :empty}} = parse_string!("abc.method()")
-    assert {:method_call, {:name, "abc"}, {:name, "method"}, {:parens, [{:name, "a"}, {:name, "b"}, {:name, "c"}]}} = parse_string!("abc.method(a, b, c)")
+    assert {:method_call, {:name, "abc"}, {:name, "method"}, {:parens, :empty}} =
+             parse_string!("abc.method()")
+
+    assert {:method_call, {:name, "abc"}, {:name, "method"},
+            {:parens, [{:name, "a"}, {:name, "b"}, {:name, "c"}]}} =
+             parse_string!("abc.method(a, b, c)")
   end
 
   test "handles basic math" do
