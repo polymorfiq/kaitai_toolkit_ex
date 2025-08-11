@@ -34,8 +34,13 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
     assert {:method_call, {:name, "abc"}, {:name, "method"}, []} =
              parse_string!("abc.method()")
 
-    assert {:method_call, {:name, "abc"}, {:name, "method"}, [{:name, "a"}, {:name, "b"}, {:name, "c"}]} =
+    assert {:method_call, {:name, "abc"}, {:name, "method"},
+            [{:name, "a"}, {:name, "b"}, {:name, "c"}]} =
              parse_string!("abc.method(a, b, c)")
+
+    assert {:method_call, {:property, {:name, "abc"}, {:name, "property"}}, {:name, "method"},
+            [{:name, "a"}, {:name, "b"}, {:name, "c"}]} =
+             parse_string!("abc.property.method(a, b, c)")
   end
 
   test "handles basic math" do
