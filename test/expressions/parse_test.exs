@@ -4,7 +4,7 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
 
   test "handles basic integers" do
     assert {:literal, 123} = parse_string!("123")
-    assert {:negative, {:literal, 123}} = parse_string!("-123")
+    assert {:literal, -123} = parse_string!("-123")
     assert {:literal, 204} = parse_string!("0xCC")
   end
 
@@ -20,14 +20,14 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
   end
 
   test "handles ternary expressions" do
-    assert {:ternary, {:name, "abc"}, {:literal, 123}, {:negative, {:literal, 456}}} =
+    assert {:ternary, {:name, "abc"}, {:literal, 123}, {:literal, -456}} =
              parse_string!("abc ? 123 : -456")
   end
 
   test "handles parenthesis" do
-    assert {:parens, {:literal, 123}} = parse_string!("(123)")
-    assert {:parens, {:negative, {:literal, float_val}}} = parse_string!("(-425.672e-1)")
-    assert_in_delta(float_val, 42.5672, 0.01)
+    assert {:literal, 123} = parse_string!("(123)")
+    assert {:literal, float_val} = parse_string!("(-425.672e-1)")
+    assert_in_delta(float_val, -42.5672, 0.01)
   end
 
   test "handles method calls" do
@@ -39,11 +39,15 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
   end
 
   test "handles basic math" do
-    assert {:multiply, {:literal, 100}, {:parens, {:subtract, {:literal, 4}, {:literal, 2}}}} =
-             parse_string!("100 * (4 - 2)")
+    assert {:literal, 200} = parse_string!("100 * (4 - 2)")
+  end
 
-    assert {:add, [{:name, "a"}, {:name, "b"}, {:name, "c"}]} =
+  test "handles variable math" do
+    assert {:add, {:add, {:name, "a"}, {:name, "b"}}, {:name, "c"}} =
              parse_string!("a + b + c")
+
+    assert {:multiply, {:multiply, {:literal, 1}, {:name, "b"}}, {:literal, 5}} =
+             parse_string!("1 * b * 5")
   end
 
   test "handles arrays" do
@@ -60,7 +64,7 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
 
   test "handles strings" do
     assert {:string, "Apple\nbottom\tjeans"} = parse_string!(~S|"Apple\nbottom\tjeans"|)
-    assert {:add, [{:string, "Apple\n"}, {:string, "bottom\t"}, {:string, "jeans"}]} = parse_string!(~S|"Apple\n" + "bottom\t" + "jeans"|)
+    assert {:string, "Apple\nbottom\tjeans"} = parse_string!(~S|"Apple\n" + "bottom\t" + "jeans"|)
   end
 
   def parse_string!(str) do

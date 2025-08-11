@@ -441,22 +441,10 @@ defmodule KaitaiToolkit.Ksy.Expression do
  #
 
   @spec parse(lexed :: [term()]) :: tuple()
-  def parse(lexed), do: lexed |> parse_first_stage()
+  def parse(lexed), do: lexed |> parse_pemdas() |> parse_first_stage() |> parse_second_stage()
 
   @spec parse_first_stage(lexed :: [term()], context :: map()) :: tuple()
   defp parse_first_stage(lexed, ctx \\ %{})
-  defp parse_first_stage([cond_expr, :question_mark, true_expr, :colon | false_expr], ctx) do
-    [{:ternary, parse_first_stage([cond_expr], ctx), parse_first_stage([true_expr], ctx), parse_first_stage(false_expr, ctx)}]
-    |> parse_first_stage(ctx)
-  end
-
-  defp parse_first_stage([some_expr, :plus, other_expr], ctx) do
-    [{:add, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
-  end
-
-  defp parse_first_stage([:dash, some_expr], ctx) do
-    [{:negative, parse_first_stage([some_expr], ctx)}] |> parse_first_stage(ctx)
-  end
 
   defp parse_first_stage([obj, :dot, method_name, {:parens, args}], ctx) do
     [
@@ -473,18 +461,11 @@ defmodule KaitaiToolkit.Ksy.Expression do
     [{:equals, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
   end
 
-  defp parse_first_stage([:not, other_expr], ctx) do
-    [{:logical_not, parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
-  end
-
-  defp parse_first_stage([some_expr, :and, other_expr], ctx) do
-    [{:logical_and, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
-  end
-
-  defp parse_first_stage([some_expr, :or, other_expr], ctx) do
-    [{:logical_or, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}] |> parse_first_stage(ctx)
-  end
-
+  defp parse_first_stage([condition, :question_mark, if_true, :colon, if_false], ctx), do: {:ternary, parse_first_stage([condition], ctx), parse_first_stage([if_true], ctx), parse_first_stage([if_false], ctx)}
+  defp parse_first_stage([{:multiply, a, b}], ctx), do: {:multiply, parse_first_stage([a], ctx), parse_first_stage([b], ctx)}
+  defp parse_first_stage([{:divide, a, b}], ctx), do: {:divide, parse_first_stage([a], ctx), parse_first_stage([b], ctx)}
+  defp parse_first_stage([{:add, a, b}], ctx), do: {:add, parse_first_stage([a], ctx), parse_first_stage([b], ctx)}
+  defp parse_first_stage([{:subtract, a, b}], ctx), do: {:subtract, parse_first_stage([a], ctx), parse_first_stage([b], ctx)}
   defp parse_first_stage([{:integer, num}], ctx), do: [{:literal, num}] |> parse_first_stage(ctx)
   defp parse_first_stage([{:float, num}], ctx), do: [{:literal, num}] |> parse_first_stage(ctx)
   defp parse_first_stage([{:negative, {:integer, num}}], ctx), do: [{:literal, -num}] |> parse_first_stage(ctx)
@@ -493,8 +474,11 @@ defmodule KaitaiToolkit.Ksy.Expression do
   defp parse_first_stage([:root], ctx), do: [{:meta, :root}] |> parse_first_stage(ctx)
   defp parse_first_stage([:parent], ctx), do: [{:meta, :parent}] |> parse_first_stage(ctx)
   defp parse_first_stage([{:brackets, items}], ctx), do: [{:array, parse_first_stage_list(items, ctx)}] |> parse_first_stage(ctx)
-  defp parse_first_stage([{:parens, {:literal, literal}}], ctx), do: [{:literal, literal}] |> parse_first_stage(ctx)
-  defp parse_first_stage([{:parens, expr}], ctx), do: {:parens, parse_first_stage(expr, ctx)}
+  defp parse_first_stage([{:parens, [single_expr]}], ctx), do: [single_expr] |> parse_first_stage(ctx)
+
+  defp parse_first_stage([{type, exprs}], ctx) when is_list(exprs),
+       do: {type, Enum.map(exprs, & parse_first_stage([&1], ctx))}
+
   defp parse_first_stage([name], ctx) when is_binary(name), do: [{:name, name}] |> parse_first_stage(ctx)
   defp parse_first_stage([parsed], _ctx), do: parsed
   defp parse_first_stage([], _ctx), do: :empty
@@ -507,4 +491,98 @@ defmodule KaitaiToolkit.Ksy.Expression do
 
   defp parse_first_stage_list([expr], ctx, parsed), do: parsed ++ [parse_first_stage([expr], ctx)]
   defp parse_first_stage_list([], _ctx, parsed), do: parsed
+
+  #
+  # parse_first_stage
+  # Further simplifies redundant tuples, such as auto-calculating math down to constants
+  # At this point we have an AST, so this simplifies the AST
+  #
+  defp parse_second_stage(parsed, ctx \\ %{})
+  defp parse_second_stage({:add, {:literal, a}, {:literal, b}}, _ctx), do: {:literal, a + b}
+  defp parse_second_stage({:add, {:string, a}, {:string, b}}, _ctx), do: {:string, a <> b}
+  defp parse_second_stage({:add, a, b} = orig, _ctx) do
+    parsed = {:add, parse_second_stage(a), parse_second_stage(b)}
+    if parsed == orig, do: orig, else: parse_second_stage(parsed)
+  end
+
+  defp parse_second_stage({:subtract, {:literal, a}, {:literal, b}}, _ctx), do: {:literal, a - b}
+  defp parse_second_stage({:subtract, a, b} = orig, _ctx) do
+    parsed = {:subtract, parse_second_stage(a), parse_second_stage(b)}
+    if parsed == orig, do: orig, else: parse_second_stage(parsed)
+  end
+
+  defp parse_second_stage({:multiply, {:literal, a}, {:literal, b}}, _ctx), do: {:literal, a * b}
+  defp parse_second_stage({:multiply, a, b} = orig, _ctx) do
+    parsed = {:multiply, parse_second_stage(a), parse_second_stage(b)}
+    if parsed == orig, do: orig, else: parse_second_stage(parsed)
+  end
+
+  defp parse_second_stage({:divide, {:literal, a}, {:literal, b}}, _ctx), do: {:literal, a / b}
+  defp parse_second_stage({:divide, a, b} = orig, _ctx) do
+    parsed = {:divide, parse_second_stage(a), parse_second_stage(b)}
+    if parsed == orig, do: orig, else: parse_second_stage(parsed)
+  end
+
+  defp parse_second_stage({:modulo, {:literal, a}, {:literal, b}}, _ctx), do: {:literal, rem(a, b)}
+  defp parse_second_stage({:modulo, a, b} = orig, _ctx) do
+    parsed = {:modulo, parse_second_stage(a), parse_second_stage(b)}
+    if parsed == orig, do: orig, else: parse_second_stage(parsed)
+  end
+
+  defp parse_second_stage({:parens, exprs}, _ctx), do: {:parens, Enum.map(exprs, &parse_second_stage/1)}
+  defp parse_second_stage({:brackets, exprs}, _ctx), do: {:brackets, Enum.map(exprs, &parse_second_stage/1)}
+  defp parse_second_stage(other, _ctx), do: other
+
+  #
+  # parse_pemdas
+  # Designed to go through and ensure proper order of math operations
+  #
+  @spec parse_pemdas(lexed :: [term()]) :: [term()]
+  defp parse_pemdas(lexed) do
+    lexed |> parse_pemdas_normalize() |> parse_pemdas_process(:star, :multiply) |> parse_pemdas_process(:slash, :divide) |> parse_pemdas_process(:plus, :add) |> parse_pemdas_process(:dash, :subtract)
+  end
+
+  # We want to properly handle negatives, like '5 * -2' - so let's first normalize those so they're not confusing
+  defp parse_pemdas_normalize(lexed, seen \\ [])
+
+  defp parse_pemdas_normalize([{type, [_ | _] = exprs} | rest], seen),
+       do: parse_pemdas_normalize(rest, seen ++ [{type, parse_pemdas_normalize(exprs)}])
+
+  defp parse_pemdas_normalize([:dash, expr | rest], []),
+       do: parse_pemdas_normalize([{:negative, expr} | rest], [])
+
+  defp parse_pemdas_normalize([op, :dash, expr | rest], seen) when is_atom(op),
+       do: parse_pemdas_normalize([op, {:negative, expr} | rest], seen)
+
+  defp parse_pemdas_normalize([expr | rest], seen),
+       do: parse_pemdas_normalize(rest, seen ++ [expr])
+
+  defp parse_pemdas_normalize([], seen), do: seen
+
+  @math_operands [:integer, :float, :string]
+  @math_ops [:multiply, :divide, :add, :subtract]
+  defp parse_pemdas_process(lexed, symbol, op, seen \\ [])
+
+  defp parse_pemdas_process([some, middle_expr, other | rest], symbol, op, seen) when middle_expr == symbol do
+    if math_obj?(some) && math_obj?(other) do
+      parse_pemdas_process([{op, some, other} | rest], symbol, op, seen)
+    else
+      parse_pemdas_process([middle_expr, other | rest], symbol, op, seen ++ [some])
+    end
+  end
+
+  defp parse_pemdas_process([{math_op, a, b} | rest], symbol, op, seen) when math_op in @math_ops,
+       do: parse_pemdas_process(rest, symbol, op, seen ++ [{math_op, parse_pemdas_process([a], symbol, op) |> List.first(), parse_pemdas_process([b], symbol, op) |> List.first()}])
+
+  defp parse_pemdas_process([{:parens, exprs} | rest], symbol, op, seen),
+       do: parse_pemdas_process(rest, symbol, op, seen ++ [{:parens, parse_pemdas_process(exprs, symbol, op)}])
+
+  defp parse_pemdas_process([parsed | rest], symbol, op, seen), do: parse_pemdas_process(rest, symbol, op, seen ++ [parsed])
+  defp parse_pemdas_process([], _, _, seen), do: seen
+
+  defp math_obj?({:parens, _}), do: true
+  defp math_obj?({op, _, _}) when op in @math_ops, do: true
+  defp math_obj?({operand, _}) when operand in @math_operands, do: true
+  defp math_obj?(operand) when is_binary(operand), do: true
+  defp math_obj?(_), do: false
 end
