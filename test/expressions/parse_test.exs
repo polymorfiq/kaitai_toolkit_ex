@@ -39,6 +39,45 @@ defmodule KaitaiToolkitTest.Expressions.ParseTest do
   end
 
   test "handles basic math" do
+    assert {:literal, 10_000} = parse_string!("100 * 100")
+    assert {:literal, 0x14} = parse_string!("0xA * 0x2")
+    assert {:literal, 6} = parse_string!("0b11 * 0x2")
+    assert {:literal, 12.5} = parse_string!("5.0 * 2.5")
+    assert {:literal, 10.0} = parse_string!("5.0 * 2")
+
+    assert {:literal, 40} = parse_string!("1000 / 25")
+    assert {:literal, 40} = parse_string!("1_000 / 2_5")
+    assert {:literal, 0x5} = parse_string!("0xA / 0x2")
+    assert {:literal, 3} = parse_string!("0b110 / 0x2")
+    assert {:literal, 2.0} = parse_string!("5.0 / 2.5")
+    assert {:literal, 2.5} = parse_string!("5.0 / 2")
+
+    assert {:literal, -25} = parse_string!("-25")
+    assert {:literal, 975} = parse_string!("1000 - 25")
+    assert {:literal, 975} = parse_string!("1_000 - 2_5")
+    assert {:literal, -1500} = parse_string!("1_000 - 2_500")
+    assert {:literal, 0x8} = parse_string!("0xA - 0x2")
+    assert {:literal, 4} = parse_string!("0b110 - 0x2")
+    assert {:literal, 2.5} = parse_string!("5.0 - 2.5")
+    assert {:literal, 3.0} = parse_string!("5.0 - 2")
+    assert {:literal, -3.0} = parse_string!("2 - 5.0")
+
+    assert {:literal, 1025} = parse_string!("1000 + 25")
+    assert {:literal, 1025} = parse_string!("1_000 + 2_5")
+    assert {:literal, 3500} = parse_string!("1_000 + 2_500")
+    assert {:literal, 0xC} = parse_string!("0xA + 0x2")
+    assert {:literal, 8} = parse_string!("0b110 + 0x2")
+    assert {:literal, 7.5} = parse_string!("5.0 + 2.5")
+    assert {:literal, 7.0} = parse_string!("5.0 + 2")
+    assert {:literal, 7.0} = parse_string!("2 + 5.0")
+
+    assert {:literal, 6} = parse_string!("5 * 2 - 4")
+    assert {:literal, -18} = parse_string!("2 - 4 * 5")
+    assert {:literal, 1.2} = parse_string!("2 - 4 / 5.0")
+    assert {:literal, 0.1} = parse_string!("2 / 4 * 5.0")
+    assert {:literal, 2.5} = parse_string!("(2.0 / 4.0) * 5.0")
+    assert {:literal, 8.0} = parse_string!("(2.0 / 4.0) * (5.0 * 2) + 3")
+
     assert {:literal, 200} = parse_string!("100 * (4 - 2)")
   end
 

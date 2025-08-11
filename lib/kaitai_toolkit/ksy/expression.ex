@@ -517,6 +517,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
     if parsed == orig, do: orig, else: parse_second_stage(parsed)
   end
 
+  defp parse_second_stage({:divide, {:literal, a}, {:literal, b}}, _ctx) when is_integer(a) and is_integer(b), do: {:literal, div(a, b)}
   defp parse_second_stage({:divide, {:literal, a}, {:literal, b}}, _ctx), do: {:literal, a / b}
   defp parse_second_stage({:divide, a, b} = orig, _ctx) do
     parsed = {:divide, parse_second_stage(a), parse_second_stage(b)}
