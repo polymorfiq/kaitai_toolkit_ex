@@ -278,7 +278,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
         # '_' in the middle of an octal number. Easier to read. Ignore it
         lex_first_stage(expr_str, word, lexed, ctx)
 
-      char == "_" && Regex.match?(~r|^0x[01]+$|, word) ->
+      char == "_" && Regex.match?(~r|^0x[0-9A-Fa-f\_]+$|, word) ->
         # '_' in the middle of a hex number. Easier to read. Ignore it
         lex_first_stage(expr_str, word, lexed, ctx)
 
@@ -487,11 +487,6 @@ defmodule KaitaiToolkit.Ksy.Expression do
     |> parse_first_stage(ctx)
   end
 
-  defp parse_first_stage([obj, :dot, prop], ctx) do
-    [{:prop_get, parse_first_stage([obj], ctx), parse_first_stage([prop], ctx)}]
-    |> parse_first_stage(ctx)
-  end
-
   defp parse_first_stage([some_expr, :is_equal, other_expr], ctx) do
     [{:equals, parse_first_stage([some_expr], ctx), parse_first_stage([other_expr], ctx)}]
     |> parse_first_stage(ctx)
@@ -637,7 +632,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
 
   defp parse_pemdas_normalize([], seen), do: seen
 
-  @math_operands [:integer, :float, :string]
+  @math_operands [:integer, :float, :string, :negative]
   @math_ops [:multiply, :divide, :add, :subtract]
   defp parse_pemdas_process(lexed, symbol, op, seen \\ [])
 
