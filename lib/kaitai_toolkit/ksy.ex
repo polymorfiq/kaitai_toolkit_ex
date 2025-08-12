@@ -35,7 +35,7 @@ defmodule KaitaiToolkit.Ksy do
 
   @spec from_str!(String.t()) :: [t()]
   def from_str!(spec_str) do
-    YamlElixir.read_from_string!(spec_str) |> from_map!()
+    YamlElixir.read_from_string!(spec_str) |> from_map!() |> with_parsed_expressions!()
   end
 
   @spec from_map!(map()) :: t()
@@ -50,6 +50,14 @@ defmodule KaitaiToolkit.Ksy do
       instances: instances(spec["instances"]),
       enums: enums(spec["enums"])
     }
+  end
+
+  @spec with_parsed_expressions!(t(), ctx :: map()) ::t()
+  def with_parsed_expressions!(ksy, ctx \\ %{path: []}) do
+    nested_ctx = Map.put_new(ctx, :ksy, ksy)
+    seq_ctx = Map.merge(nested_ctx, %{parent: ksy, path: [:seq | ctx.path]})
+
+    %{ksy | seq: Enum.map(ksy.seq, & Attribute.with_parsed_expressions!(&1, seq_ctx))}
   end
 
   defp meta(nil), do: nil

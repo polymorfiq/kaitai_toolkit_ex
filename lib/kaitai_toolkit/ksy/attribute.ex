@@ -1,5 +1,7 @@
 defmodule KaitaiToolkit.Ksy.Attribute do
+  alias KaitaiToolkit.Ksy.Expression
   alias KaitaiToolkit.Ksy.ScalarType
+  alias  KaitaiToolkit.Ksy.TypeSystem
 
   defstruct [
     :id,
@@ -83,6 +85,28 @@ defmodule KaitaiToolkit.Ksy.Attribute do
       value: value(data["value"])
     }
   end
+
+  @spec with_parsed_expressions!(t(), ctx :: map()) :: t()
+  def with_parsed_expressions!(attr, ctx) do
+    attr
+    |> maybe_parse_repeat(ctx)
+  end
+
+  defp maybe_parse_repeat(%{repeat: :expr, repeat_expr: {:expr, expr_str}} = attr, _ctx) do
+    parsed = expr_str |> Expression.lex() |> Expression.parse()
+    parsed_type = TypeSystem.type(parsed)
+
+    Map.put(attr, :repeat_expr, {:parsed_expr, parsed_type, parsed})
+  end
+
+  defp maybe_parse_repeat(%{repeat: :until, repeat_until: {:expr, expr_str}} = attr, _ctx) do
+    parsed = expr_str |> Expression.lex() |> Expression.parse()
+    parsed_type = TypeSystem.type(parsed)
+
+    Map.put(attr, :repeat_until, {:parsed_expr, parsed_type, parsed})
+  end
+
+  defp maybe_parse_repeat(attr, _), do: attr
 
   defp id(nil), do: nil
 

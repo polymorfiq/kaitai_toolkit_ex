@@ -11,6 +11,7 @@ defmodule KaitaiToolkit.Ksy.TypeSystem do
   def type({:literal, int}) when is_integer(int), do: {:ok, :integer}
   def type({:literal, float}) when is_float(float), do: {:ok, :float}
   def type({:string, _}), do: {:ok, :string}
+  def type({:name, name}), do: {:ok, {:runtime_value, name}}
 
   @math_ops [:multiply, :divide, :add, :subtract]
   def type({math_op, a, b}) when math_op in @math_ops do
