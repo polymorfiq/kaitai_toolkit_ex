@@ -70,14 +70,14 @@ defmodule KaitaiToolkit.Generation do
   defp gen_read_functions(mod, opts) do
     read_spec =
       quote do
-        @spec read!(io :: KaitaiStream.t()) :: t()
+        @spec read!(io :: KaitaiStream.t(), read_opts :: map()) :: t()
       end
 
     base_map = quote do: %{}
 
     read_def =
       quote do
-        def read!(io) do
+        def read!(io, read_opts \\ %{parents: []}) do
           unquote(gen_read_steps(mod, base_map, mod.attrs, opts))
         end
       end
@@ -142,7 +142,7 @@ defmodule KaitaiToolkit.Generation do
     quote do
       unquote(left)
       |> then(fn ksy ->
-        repeat_val = KaitaiToolkit.Struct.parse_expr!(ksy, nil, unquote(repeat_expr))
+        repeat_val = KaitaiToolkit.Struct.parse_expr!(%{self: ksy, parents: read_opts.parents}, unquote(repeat_expr))
 
         case repeat_val do
           repeat_count when is_integer(repeat_count) ->
@@ -169,7 +169,7 @@ defmodule KaitaiToolkit.Generation do
         val =
           Stream.repeatedly(fn -> 1 end)
           |> Enum.reduce_while([], fn _, acc ->
-            until_state = KaitaiToolkit.Struct.parse_expr!(ksy, acc, unquote(until_expr))
+            until_state = KaitaiToolkit.Struct.parse_expr!(%{self: acc, parents: [ksy | read_opts.parents]}, unquote(until_expr))
 
             if until_state,
               do: {:halt, Enum.reverse(acc)},
@@ -184,16 +184,16 @@ defmodule KaitaiToolkit.Generation do
   defp gen_read_step(%{data_type: :bytes} = attr, _mod, left, _opts) do
     quote do
       unquote(left)
-      |> then(
-        &Map.put(
-          &1,
+      |> then(fn ksy ->
+        Map.put(
+          ksy,
           unquote(String.to_atom(attr.name)),
           KaitaiStruct.Stream.read_bytes_array!(
             io,
-            KaitaiToolkit.Struct.parse_expr!(&1, unquote(attr.attr.size))
+            KaitaiToolkit.Struct.parse_expr!(%{self: ksy, parents: read_opts.parents}, unquote(attr.attr.size))
           )
         )
-      )
+      end)
     end
   end
 
@@ -203,16 +203,16 @@ defmodule KaitaiToolkit.Generation do
   defp gen_read_step(%{data_type: :str} = attr, _mod, left, _opts) do
     quote do
       unquote(left)
-      |> then(
-        &Map.put(
-          &1,
+      |> then(fn ksy ->
+        Map.put(
+          ksy,
           unquote(String.to_atom(attr.name)),
           KaitaiStruct.Stream.read_bytes_array!(
             io,
-            KaitaiToolkit.Struct.parse_expr!(&1, unquote(attr.attr.size))
+            KaitaiToolkit.Struct.parse_expr!(%{self: ksy, parents: read_opts.parents}, unquote(attr.attr.size))
           )
         )
-      )
+      end)
     end
   end
 
@@ -240,7 +240,7 @@ defmodule KaitaiToolkit.Generation do
   defp gen_read_step(%{data_type: data_type} = attr, _mod, left, opts) do
     quote do
       unquote(left)
-      |> Map.put(unquote(String.to_atom(attr.name)), unquote(gen_read_fn(data_type, opts)))
+      |> then(fn ksy -> Map.put(ksy, unquote(String.to_atom(attr.name)), unquote(gen_read_fn(data_type, opts))) end)
     end
   end
 
@@ -275,7 +275,7 @@ defmodule KaitaiToolkit.Generation do
     custom_mod_name = :"#{Module.concat(opts[:root], Macro.camelize(name))}"
 
     quote do
-      unquote(custom_mod_name).read!(io)
+      unquote(custom_mod_name).read!(io, %{read_opts | parents: [ksy | read_opts.parents]})
     end
   end
 

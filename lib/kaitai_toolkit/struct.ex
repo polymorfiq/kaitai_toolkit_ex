@@ -21,9 +21,9 @@ defmodule KaitaiToolkit.Struct do
     generated
   end
 
-  @spec parse_expr!(map(), term(), term()) :: term()
-  def parse_expr!(data, self, {:expr, expr_str}) do
-    ctx = %{data: data, self: self}
+  @spec parse_expr!(map(), term()) :: term()
+  def parse_expr!(ctx, {:expr, expr_str}) do
+    ctx = %{self: ctx.self, parents: ctx.parents}
     parsed = expr_str |> Expression.lex() |> Expression.parse()
 
     calculate_runtime_expr(ctx, parsed)
@@ -39,7 +39,7 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_runtime_expr(ctx, vals) when is_list(vals),
     do: Enum.map(vals, &calculate_runtime_expr(ctx, &1))
 
-  defp calculate_runtime_expr(ctx, {:name, name}), do: Map.fetch!(ctx.data, String.to_atom(name))
+  defp calculate_runtime_expr(ctx, {:name, name}), do: Map.fetch!(ctx.self, String.to_atom(name))
 
   defp calculate_runtime_expr(ctx, {:property, val, {:name, prop}}) do
     calculate_property_call(ctx, val, prop)
@@ -239,8 +239,11 @@ defmodule KaitaiToolkit.Struct do
     end
   end
 
-  defp calculate_property_call(%{self: self} = ctx, :self, prop),
+  defp calculate_property_call(%{self: self} = ctx, {:meta, :self}, prop),
     do: calculate_property_call(ctx, self, prop)
+
+  defp calculate_property_call(%{parents: [parent | rest_parents]} = ctx, {:meta, :parent}, prop),
+       do: calculate_property_call(%{ctx | self: parent, parents: rest_parents}, parent, prop)
 
   defp calculate_property_call(ctx, int, "to_s") when is_integer(int), do: calculate_method_call(ctx, int, "to_s", [])
   defp calculate_property_call(ctx, float, "to_i") when is_float(float), do: calculate_method_call(ctx, float, "to_i", [])
@@ -251,8 +254,9 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_property_call(ctx, {:string, str}, "length"), do: calculate_method_call(ctx, {:string, str}, "length", [])
   defp calculate_property_call(ctx, {:string, str}, "reverse"), do: calculate_method_call(ctx, {:string, str}, "reverse", [])
   defp calculate_property_call(ctx, {:string, str}, "to_i"), do: calculate_method_call(ctx, {:string, str}, "to_i", [])
+  defp calculate_property_call(_, data, key_name) when is_map(data), do: Map.fetch!(data, String.to_existing_atom(key_name))
 
-  defp calculate_method_call(%{self: self} = ctx, :self, method, args),
+  defp calculate_method_call(%{self: self} = ctx, {:meta, :self}, method, args),
     do: calculate_method_call(ctx, self, method, args)
 
   defp calculate_method_call(_, int, "to_s", []) when is_integer(int) do

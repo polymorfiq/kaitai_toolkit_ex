@@ -565,6 +565,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
   defp parse_first_stage([:io], ctx), do: [{:meta, :io}] |> parse_first_stage(ctx)
   defp parse_first_stage([:root], ctx), do: [{:meta, :root}] |> parse_first_stage(ctx)
   defp parse_first_stage([:parent], ctx), do: [{:meta, :parent}] |> parse_first_stage(ctx)
+  defp parse_first_stage([:self], ctx), do: [{:meta, :self}] |> parse_first_stage(ctx)
 
   defp parse_first_stage([{:brackets, items}], ctx),
     do: [{:array, parse_first_stage_list(items, ctx)}] |> parse_first_stage(ctx)
