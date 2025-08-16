@@ -142,7 +142,7 @@ defmodule KaitaiToolkit.Generation do
     quote do
       unquote(left)
       |> then(fn ksy ->
-        repeat_val = KaitaiToolkit.Struct.parse_expr!(%{self: ksy, parents: read_opts.parents}, unquote(repeat_expr))
+        repeat_val = KaitaiToolkit.Struct.parse_expr!(%{io: io, self: ksy, parents: read_opts.parents}, unquote(repeat_expr))
 
         case repeat_val do
           repeat_count when is_integer(repeat_count) ->
@@ -169,7 +169,7 @@ defmodule KaitaiToolkit.Generation do
         val =
           Stream.repeatedly(fn -> 1 end)
           |> Enum.reduce_while([], fn _, acc ->
-            until_state = KaitaiToolkit.Struct.parse_expr!(%{self: acc, parents: [ksy | read_opts.parents]}, unquote(until_expr))
+            until_state = KaitaiToolkit.Struct.parse_expr!(%{io: io, self: acc, parents: [ksy | read_opts.parents]}, unquote(until_expr))
 
             if until_state,
               do: {:halt, Enum.reverse(acc)},
@@ -190,7 +190,7 @@ defmodule KaitaiToolkit.Generation do
           unquote(String.to_atom(attr.name)),
           KaitaiStruct.Stream.read_bytes_array!(
             io,
-            KaitaiToolkit.Struct.parse_expr!(%{self: ksy, parents: read_opts.parents}, unquote(attr.attr.size))
+            KaitaiToolkit.Struct.parse_expr!(%{io: io, self: ksy, parents: read_opts.parents}, unquote(attr.attr.size))
           )
         )
       end)
@@ -209,7 +209,7 @@ defmodule KaitaiToolkit.Generation do
           unquote(String.to_atom(attr.name)),
           KaitaiStruct.Stream.read_bytes_array!(
             io,
-            KaitaiToolkit.Struct.parse_expr!(%{self: ksy, parents: read_opts.parents}, unquote(attr.attr.size))
+            KaitaiToolkit.Struct.parse_expr!(%{io: io, self: ksy, parents: read_opts.parents}, unquote(attr.attr.size))
           )
         )
       end)
