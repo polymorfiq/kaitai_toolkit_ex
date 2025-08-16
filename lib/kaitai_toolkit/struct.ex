@@ -35,36 +35,12 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_runtime_expr(ctx, vals) when is_list(vals), do: Enum.map(vals, &calculate_runtime_expr(ctx, &1))
   defp calculate_runtime_expr(ctx, {:name, name}), do: Map.fetch!(ctx.data, String.to_atom(name))
 
-  defp calculate_runtime_expr(%{self: int}, {:property, :self, {:name, "to_s"}}) when is_integer(int) do
-    "#{int}"
+  defp calculate_runtime_expr(%{self: self} = ctx, {:property, :self, {:name, prop}}) do
+    calculate_property_call(ctx, self, prop)
   end
 
-  defp calculate_runtime_expr(%{self: float}, {:property, :self, {:name, "to_s"}}) when is_float(float) do
-    trunc(float)
-  end
-
-  defp calculate_runtime_expr(%{self: list}, {:property, :self, {:name, "length"}}) when is_list(list) do
-    Enum.count(list)
-  end
-
-  defp calculate_runtime_expr(%{self: byte_array}, {:property, :self, {:name, "length"}}) when is_binary(byte_array) do
-    byte_size(byte_array)
-  end
-
-  defp calculate_runtime_expr(%{self: byte_array}, {:method_call, :self, {:name, "to_s"}, [{:string, "UTF-8"}]}) when is_binary(byte_array) do
-    {:string, {:unicode.characters_to_binary(byte_array, {:utf8, :big})}}
-  end
-
-  defp calculate_runtime_expr(%{self: byte_array}, {:method_call, :self, {:name, "to_s"}, [{:string, "UTF-16"}]}) when is_binary(byte_array) do
-    {:string, {:unicode.characters_to_binary(byte_array, {:utf16, :big})}}
-  end
-
-  defp calculate_runtime_expr(%{self: byte_array}, {:method_call, :self, {:name, "to_s"}, [{:string, "UTF-16LE"}]}) when is_binary(byte_array) do
-    {:string, {:unicode.characters_to_binary(byte_array, {:utf16, :little})}}
-  end
-
-  defp calculate_runtime_expr(%{self: {:string, str}}, {:property, :self, {:name, "length"}}) do
-    String.length(str)
+  defp calculate_runtime_expr(%{self: self} = ctx, {:method_call, :self, {:name, method}, args}) do
+    calculate_method_call(ctx, self, method, args)
   end
 
   defp calculate_runtime_expr(ctx, {:multiply, a, b}) do
@@ -254,5 +230,22 @@ defmodule KaitaiToolkit.Struct do
     case {val_a, val_b} do
       {a, b} when is_number(a) and is_number(b) -> Bitwise.bxor(a, b)
     end
+  end
+
+  defp calculate_property_call(_, int, "to_s") when is_integer(int), do: "#{int}"
+  defp calculate_property_call(_, float, "to_i") when is_float(float), do: trunc(float)
+  defp calculate_property_call(_, list, "length") when is_list(list), do: Enum.count(list)
+  defp calculate_property_call(_, byte_array, "length") when is_binary(byte_array), do: byte_size(byte_array)
+  defp calculate_property_call(_, {:string, str}, "length"), do: String.length(str)
+
+  defp calculate_method_call(_, byte_array, "to_s", [{:string, "UTF-8"}]) do
+    {:string, {:unicode.characters_to_binary(byte_array, {:utf8, :big})}}
+  end
+
+  defp calculate_method_call(_, byte_array, "to_s", [{:string, "UTF-16"}]) do
+    {:string, {:unicode.characters_to_binary(byte_array, {:utf16, :big})}}
+  end
+  defp calculate_method_call(_, byte_array, "to_s", [{:string, "UTF-16LE"}]) do
+    {:string, {:unicode.characters_to_binary(byte_array, {:utf16, :little})}}
   end
 end
