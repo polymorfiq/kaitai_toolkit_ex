@@ -29,6 +29,9 @@ defmodule KaitaiToolkit.Struct do
     calculate_runtime_expr(ctx, parsed)
   end
 
+  defp calculate_runtime_expr(%{self: self}, {:meta, :self}), do: self
+  defp calculate_runtime_expr(%{parents: [parent | _]}, {:meta, :parent}), do: parent
+  defp calculate_runtime_expr(%{parents: [_ | _] = parents}, {:meta, :root}), do: List.last(parents)
   defp calculate_runtime_expr(_ctx, val) when is_number(val), do: val
   defp calculate_runtime_expr(_ctx, val) when is_binary(val), do: val
   defp calculate_runtime_expr(_ctx, val) when is_boolean(val), do: val
@@ -42,7 +45,7 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_runtime_expr(ctx, {:name, name}), do: Map.fetch!(ctx.self, String.to_atom(name))
 
   defp calculate_runtime_expr(ctx, {:property, val, {:name, prop}}) do
-    calculate_property_call(ctx, val, prop)
+    calculate_property_call(ctx, calculate_runtime_expr(ctx, val), prop)
   end
 
   defp calculate_runtime_expr(ctx, {:method_call, val, {:name, method}, args}) do
@@ -245,6 +248,9 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_property_call(%{parents: [parent | rest_parents]} = ctx, {:meta, :parent}, prop),
        do: calculate_property_call(%{ctx | self: parent, parents: rest_parents}, parent, prop)
 
+  defp calculate_property_call(%{parents: [_ | _] = parents} = ctx, {:meta, :root}, prop),
+       do: calculate_property_call(%{ctx | self: List.last(parents), parents: []}, List.last(parents), prop)
+
   defp calculate_property_call(ctx, int, "to_s") when is_integer(int), do: calculate_method_call(ctx, int, "to_s", [])
   defp calculate_property_call(ctx, float, "to_i") when is_float(float), do: calculate_method_call(ctx, float, "to_i", [])
   defp calculate_property_call(ctx, list, "length") when is_list(list), do: calculate_method_call(ctx, list, "length", [])
@@ -258,6 +264,12 @@ defmodule KaitaiToolkit.Struct do
 
   defp calculate_method_call(%{self: self} = ctx, {:meta, :self}, method, args),
     do: calculate_method_call(ctx, self, method, args)
+
+  defp calculate_method_call(%{parents: [parent | rest_parents]} = ctx, {:meta, :parent}, method, args),
+       do: calculate_method_call(%{ctx | self: parent, parents: rest_parents}, parent, method, args)
+
+  defp calculate_method_call(%{parents: [_ | _] = parents} = ctx, {:meta, :root}, method, args),
+       do: calculate_method_call(%{ctx | self: List.last(parents), parents: []}, List.last(parents), method, args)
 
   defp calculate_method_call(_, int, "to_s", []) when is_integer(int) do
     {:string, "#{int}"}

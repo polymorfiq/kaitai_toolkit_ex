@@ -211,7 +211,6 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
     assert [] = list_of_things.things
   end
 
-
   test "can handle a parent call" do
     defmodule RuntimeParentExpression do
       use KaitaiToolkit.Struct,
@@ -245,6 +244,62 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
     list_of_things = RuntimeParentExpression.read!(io)
     assert 3 == list_of_things.num_things
     assert [1, 2, 3] = list_of_things.thing.things
+  end
+
+
+  test "can handle a nested parent call" do
+    defmodule RuntimeNestedParentExpression do
+      use KaitaiToolkit.Struct,
+          contents: """
+            meta:
+              id: list_of_things
+              title: A bunch of things
+            seq:
+              - id: num_things
+                type: s2
+              - id: num_double_things
+                type: s2
+              - id: thing
+                type: a_thing
+            types:
+              a_thing:
+                seq:
+                  - id: single_things
+                    type: s2
+                    repeat: expr
+                    repeat-expr: _parent.num_things
+                  - id: double
+                    type: double_nested
+              double_nested:
+                seq:
+                  - id: single_double_things
+                    type: s2
+                    repeat: expr
+                    repeat-expr: _parent.single_things.length
+                  - id: double_things
+                    type: s2
+                    repeat: expr
+                    repeat-expr: _root.num_double_things
+          """
+    end
+
+    io =
+      binary_stream(<<
+        1::signed-integer-16,
+        3::signed-integer-16,
+        1::signed-integer-16,
+        2::signed-integer-16,
+        3::signed-integer-16,
+        4::signed-integer-16,
+        5::signed-integer-16,
+      >>)
+
+    list_of_things = RuntimeNestedParentExpression.read!(io)
+    assert 1 == list_of_things.num_things
+    assert 3 == list_of_things.num_double_things
+    assert [1] == list_of_things.thing.single_things
+    assert [2] == list_of_things.thing.double.single_double_things
+    assert [3, 4, 5] == list_of_things.thing.double.double_things
   end
 
   defp binary_stream(bin_data) do
