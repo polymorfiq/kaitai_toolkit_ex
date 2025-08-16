@@ -52,12 +52,12 @@ defmodule KaitaiToolkit.Ksy do
     }
   end
 
-  @spec with_parsed_expressions!(t(), ctx :: map()) ::t()
+  @spec with_parsed_expressions!(t(), ctx :: map()) :: t()
   def with_parsed_expressions!(ksy, ctx \\ %{path: []}) do
     nested_ctx = Map.put_new(ctx, :ksy, ksy)
     seq_ctx = Map.merge(nested_ctx, %{parent: ksy, path: [:seq | ctx.path]})
 
-    %{ksy | seq: Enum.map(ksy.seq, & Attribute.with_parsed_expressions!(&1, seq_ctx))}
+    %{ksy | seq: Enum.map(ksy.seq, &Attribute.with_parsed_expressions!(&1, seq_ctx))}
   end
 
   defp meta(nil), do: nil

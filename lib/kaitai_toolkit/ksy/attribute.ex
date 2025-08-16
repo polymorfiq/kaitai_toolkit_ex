@@ -1,7 +1,7 @@
 defmodule KaitaiToolkit.Ksy.Attribute do
   alias KaitaiToolkit.Ksy.Expression
   alias KaitaiToolkit.Ksy.ScalarType
-  alias  KaitaiToolkit.Ksy.TypeSystem
+  alias KaitaiToolkit.Ksy.TypeSystem
 
   defstruct [
     :id,
@@ -38,6 +38,7 @@ defmodule KaitaiToolkit.Ksy.Attribute do
           type: ScalarType.type_ref() | %{switch_on: term(), cases: [tuple()]},
           repeat: repeat() | nil,
           repeat_expr: non_neg_integer() | {:expr, String.t()} | nil,
+          repeat_until: {:expr, String.t()} | nil,
           if: String.t() | nil,
           size: non_neg_integer() | {:expr, String.t()} | nil,
           process:
@@ -96,14 +97,33 @@ defmodule KaitaiToolkit.Ksy.Attribute do
     parsed = expr_str |> Expression.lex() |> Expression.parse()
     parsed_type = TypeSystem.type(parsed)
 
-    Map.put(attr, :repeat_expr, {:parsed_expr, parsed_type, parsed})
+    case parsed_type do
+      {:ok, :integer} -> :ok
+      {:ok, {:runtime_value, _}} -> :ok
+      {:ok, other} -> raise "Unexpected repeat-expr type: #{inspect(other)} in '#{inspect(expr_str)}'"
+      {:error, err} -> raise "Error calculating repeat-expr type: #{inspect(err)} in '#{inspect(expr_str)}'"
+    end
+
+    expr_val = case parsed do
+      {:literal, val} -> val
+      _ -> {:expr, expr_str}
+    end
+
+    Map.put(attr, :repeat_expr, expr_val)
   end
 
   defp maybe_parse_repeat(%{repeat: :until, repeat_until: {:expr, expr_str}} = attr, _ctx) do
     parsed = expr_str |> Expression.lex() |> Expression.parse()
     parsed_type = TypeSystem.type(parsed)
 
-    Map.put(attr, :repeat_until, {:parsed_expr, parsed_type, parsed})
+    case parsed_type do
+      {:ok, :boolean} -> :ok
+      {:ok, {:runtime_value, _}} -> :ok
+      {:ok, other} -> raise "Unexpected repeat-until type: #{inspect(other)} in '#{inspect(expr_str)}'"
+      {:error, err} -> raise "Error calculating repeat-until type: #{inspect(err)} in '#{inspect(expr_str)}'"
+    end
+
+    attr
   end
 
   defp maybe_parse_repeat(attr, _), do: attr

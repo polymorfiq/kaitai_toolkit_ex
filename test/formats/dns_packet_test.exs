@@ -25,7 +25,7 @@ defmodule KaitaiToolkitTest.Formats.DnsPacketTest do
 
     packet = DnsPacket.read!(io)
     assert packet.transaction_id == 123
-    assert packet.flags == 0
+    assert packet.flags.flag == 0
     assert packet.qdcount == 0
     assert packet.ancount == 0
     assert packet.nscount == 0
