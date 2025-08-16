@@ -16,7 +16,7 @@ defmodule KaitaiToolkit.Struct do
       end
 
     generated = Generation.generate(ksy, root: __CALLER__.module)
-    #    generated |> Macro.to_string() |> Code.format_string!() |> IO.puts()
+#    generated |> Macro.to_string() |> Code.format_string!() |> IO.puts()
 
     generated
   end
@@ -30,7 +30,7 @@ defmodule KaitaiToolkit.Struct do
   end
 
   defp calculate_runtime_expr(%{io: io}, {:meta, :io}), do: io
-  defp calculate_runtime_expr(%{self: self}, {:meta, :self}), do: self
+  defp calculate_runtime_expr(%{self: self}, {:meta, :self}) when is_list(self), do: List.first(self)
   defp calculate_runtime_expr(%{parents: [parent | _]}, {:meta, :parent}), do: parent
   defp calculate_runtime_expr(%{parents: [_ | _] = parents}, {:meta, :root}), do: List.last(parents)
   defp calculate_runtime_expr(_ctx, val) when is_number(val), do: val
@@ -43,7 +43,7 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_runtime_expr(ctx, vals) when is_list(vals),
     do: Enum.map(vals, &calculate_runtime_expr(ctx, &1))
 
-  defp calculate_runtime_expr(ctx, {:name, name}), do: Map.fetch!(ctx.self, String.to_atom(name))
+  defp calculate_runtime_expr(ctx, {:name, name}), do: calculate_property_call(ctx, ctx.self, name)
 
   defp calculate_runtime_expr(ctx, {:property, val, {:name, prop}}) do
     calculate_property_call(ctx, calculate_runtime_expr(ctx, val), prop)
@@ -117,6 +117,9 @@ defmodule KaitaiToolkit.Struct do
 
     case {val_a, val_b} do
       {{:string, a}, {:string, b}} -> a == b
+      {nil, nil} -> true
+      {a, nil} -> false
+      {nil, b} -> false
       {a, b} when is_number(a) and is_number(b) -> a == b
       {a, b} when is_boolean(a) and is_boolean(b) -> a == b
       {a, b} when is_binary(a) and is_binary(b) -> a == b
@@ -159,6 +162,9 @@ defmodule KaitaiToolkit.Struct do
     val_b = calculate_runtime_expr(ctx, b)
 
     case {val_a, val_b} do
+      {nil, nil} -> true
+      {a, nil} -> true
+      {nil, b} -> false
       {a, b} when is_number(a) and is_number(b) -> a >= b
     end
   end
@@ -243,6 +249,7 @@ defmodule KaitaiToolkit.Struct do
     end
   end
 
+  defp calculate_property_call(ctx, nil, _), do: nil
   defp calculate_property_call(ctx, int, "to_s") when is_integer(int), do: calculate_method_call(ctx, int, "to_s", [])
   defp calculate_property_call(ctx, float, "to_i") when is_float(float), do: calculate_method_call(ctx, float, "to_i", [])
   defp calculate_property_call(ctx, bool, "to_i") when is_boolean(bool), do: calculate_method_call(ctx, bool, "to_i", [])
@@ -261,7 +268,18 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_property_call(ctx, stream, "eof") when is_pid(stream), do: calculate_method_call(ctx, stream, "eof", [])
   defp calculate_property_call(ctx, stream, "size") when is_pid(stream), do: calculate_method_call(ctx, stream, "size", [])
   defp calculate_property_call(ctx, stream, "pos") when is_pid(stream), do: calculate_method_call(ctx, stream, "pos", [])
-  defp calculate_property_call(_, data, key_name) when is_map(data), do: Map.fetch!(data, String.to_existing_atom(key_name))
+  defp calculate_property_call(ctx, data, key_name) when is_map(data) do
+    key = String.to_existing_atom(key_name)
+
+    cond do
+      val = Map.get(data, key) -> val
+      true ->
+        {:unknown_name, key}
+    end
+  end
+
+
+  defp calculate_method_call(_, nil, _, _), do: nil
 
   defp calculate_method_call(_, int, "to_s", []) when is_integer(int) do
     {:string, "#{int}"}

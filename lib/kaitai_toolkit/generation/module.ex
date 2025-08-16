@@ -1,3 +1,3 @@
 defmodule KaitaiToolkit.Generation.Module do
-  defstruct [:attrs, :deps]
+  defstruct [:name, :attrs, :instances, :deps]
 end

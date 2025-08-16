@@ -762,6 +762,9 @@ defmodule KaitaiToolkit.Ksy.Expression do
   defp parse_object_properties([a, :dot, b | rest], seen),
     do: parse_object_properties([{:property, a, b} | rest], seen)
 
+  defp parse_object_properties([a, :colon, :colon, b | rest], seen),
+       do: parse_object_properties([{:enum_val, a, b} | rest], seen)
+
   defp parse_object_properties([{:property, obj, method_name}, {:parens, args} | rest], seen),
     do: parse_object_properties([{:method_call, obj, method_name, args} | rest], seen)
 

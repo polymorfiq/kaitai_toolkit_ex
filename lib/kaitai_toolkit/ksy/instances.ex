@@ -5,7 +5,7 @@ defmodule KaitaiToolkit.Ksy.Instances do
   @spec from_map!(map()) :: t()
   def from_map!(data) do
     data
-    |> Enum.map(fn {key, data} -> {key, Attribute.from_map!(data)} end)
+    |> Enum.map(fn {key, data} -> {String.to_atom(key), Attribute.from_map!(data)} end)
     |> Map.new()
   end
 end

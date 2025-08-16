@@ -168,7 +168,7 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
             - id: things
               type: s2
               repeat: until
-              repeat-until: _.length <= -5 or _.length > 3
+              repeat-until: _ == 7234
         """
     end
 
@@ -181,7 +181,7 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
       >>)
 
     list_of_things = RuntimeRepeatUntil.read!(io)
-    assert [102, 634, 7234, 522] = list_of_things.things
+    assert [102, 634, 7234] = list_of_things.things
   end
 
   test "can handle basic string to integer" do

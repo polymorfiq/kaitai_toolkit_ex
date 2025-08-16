@@ -39,7 +39,7 @@ defmodule KaitaiToolkit.Ksy.Attribute do
           repeat: repeat() | nil,
           repeat_expr: non_neg_integer() | {:expr, String.t()} | nil,
           repeat_until: {:expr, String.t()} | nil,
-          if: String.t() | nil,
+          if: {:expr, String.t()} | nil,
           size: non_neg_integer() | {:expr, String.t()} | nil,
           process:
             {:xor, binary()}
@@ -191,7 +191,7 @@ defmodule KaitaiToolkit.Ksy.Attribute do
   defp repeat_until(str) when is_binary(str), do: {:expr, str}
 
   defp if(nil), do: nil
-  defp if(condition) when is_binary(condition), do: condition
+  defp if(condition) when is_binary(condition), do: {:expr, condition}
 
   defp size(nil), do: nil
   defp size(num) when is_integer(num), do: num

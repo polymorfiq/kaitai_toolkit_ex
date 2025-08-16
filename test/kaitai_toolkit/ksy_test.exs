@@ -168,7 +168,7 @@ defmodule KaitaiToolkit.KsyTest do
     assert a.eos_error == true
 
     assert b.id == "b_attr"
-    assert b.if == "a_attr == 123"
+    assert b.if == {:expr, "a_attr == 123"}
     assert b.type == {:bits, 123}
     assert b.process == {:xor, [123, 456]}
     assert b.consume == false
@@ -210,7 +210,7 @@ defmodule KaitaiToolkit.KsyTest do
         type: u8le
     """
 
-    assert a = spec.instances["some_inst"]
+    assert a = spec.instances.some_inst
     assert a.id == "a_attr"
     assert a.doc == "My Doc"
     assert a.doc_ref == ["My Doc Ref"]
