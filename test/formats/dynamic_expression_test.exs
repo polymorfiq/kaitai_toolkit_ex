@@ -184,6 +184,33 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
     assert [102, 634, 7234, 522] = list_of_things.things
   end
 
+  test "can handle basic string to integer" do
+    defmodule RuntimeStringToInteger do
+      use KaitaiToolkit.Struct,
+        contents: """
+          meta:
+            id: list_of_things
+            title: A bunch of things
+          seq:
+            - id: things
+              type: s2
+              repeat: until
+              repeat-until: "\\"AD\\".to_i(16).to_s() == \\"173\\""
+        """
+    end
+
+    io =
+      binary_stream(<<
+        102::signed-integer-16,
+        634::signed-integer-16,
+        7234::signed-integer-16,
+        522::signed-integer-16
+      >>)
+
+    list_of_things = RuntimeStringToInteger.read!(io)
+    assert [] = list_of_things.things
+  end
+
   defp binary_stream(bin_data) do
     io_stream = StringIO.open(bin_data) |> then(fn {:ok, io} -> IO.binstream(io, 1) end)
     {:ok, kaitai} = GenServer.start_link(KaitaiStruct.Stream, {io_stream, byte_size(bin_data)})

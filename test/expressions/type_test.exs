@@ -113,9 +113,7 @@ defmodule KaitaiToolkitTest.Expressions.TypeTest do
              TypeSystem.type!({:multiply, 3.0, {:add, 3, 2}})
 
     assert :float =
-             TypeSystem.type!(
-               {:multiply, 3.0, {:add, 3, 2.0}}
-             )
+             TypeSystem.type!({:multiply, 3.0, {:add, 3, 2.0}})
 
     assert :integer = type_string!("1 / 3*3")
     assert :float = type_string!("2*1/2.0")

@@ -146,9 +146,10 @@ defmodule KaitaiToolkit.Generation do
 
         case repeat_val do
           repeat_count when is_integer(repeat_count) ->
-            val = Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(repeat_count), fn _idx ->
-              unquote(gen_read_fn(data_type, opts))
-            end)
+            val =
+              Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(repeat_count), fn _idx ->
+                unquote(gen_read_fn(data_type, opts))
+              end)
 
             Map.put(ksy, unquote(String.to_atom(attr.name)), val)
         end
@@ -165,14 +166,15 @@ defmodule KaitaiToolkit.Generation do
     quote do
       unquote(left)
       |> then(fn ksy ->
-        val = Stream.repeatedly(fn -> 1 end)
-        |> Enum.reduce_while([], fn _, acc ->
-          until_state = KaitaiToolkit.Struct.parse_expr!(ksy, acc, unquote(until_expr))
+        val =
+          Stream.repeatedly(fn -> 1 end)
+          |> Enum.reduce_while([], fn _, acc ->
+            until_state = KaitaiToolkit.Struct.parse_expr!(ksy, acc, unquote(until_expr))
 
-          if until_state,
-            do: {:halt, Enum.reverse(acc)},
-            else: {:cont, [unquote(gen_read_fn(data_type, opts)) | acc]}
-        end)
+            if until_state,
+              do: {:halt, Enum.reverse(acc)},
+              else: {:cont, [unquote(gen_read_fn(data_type, opts)) | acc]}
+          end)
 
         Map.put(ksy, unquote(String.to_atom(attr.name)), val)
       end)
@@ -183,15 +185,15 @@ defmodule KaitaiToolkit.Generation do
     quote do
       unquote(left)
       |> then(
-           &Map.put(
-             &1,
-             unquote(String.to_atom(attr.name)),
-             KaitaiStruct.Stream.read_bytes_array!(
-               io,
-               KaitaiToolkit.Struct.parse_expr!(&1, unquote(attr.attr.size))
-             )
-           )
-         )
+        &Map.put(
+          &1,
+          unquote(String.to_atom(attr.name)),
+          KaitaiStruct.Stream.read_bytes_array!(
+            io,
+            KaitaiToolkit.Struct.parse_expr!(&1, unquote(attr.attr.size))
+          )
+        )
+      )
     end
   end
 
