@@ -1,6 +1,5 @@
 defmodule KaitaiToolkitTest.Formats.DnsPacketTest do
   use ExUnit.Case
-  doctest KaitaiToolkit
 
   test "can read a basic spec without crashing" do
     defmodule DnsPacket do

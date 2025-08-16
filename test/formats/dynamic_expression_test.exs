@@ -1,6 +1,5 @@
 defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
   use ExUnit.Case
-  doctest KaitaiToolkit
 
   test "can handle repeat-eos" do
     defmodule ListOfThings do

@@ -263,12 +263,28 @@ defmodule KaitaiToolkit.Generation do
     end
   end
 
+  defp gen_read_step(%{data_type: :bytes, attr: %{size_eos: true}} = attr, _mod, left, _opts) do
+    quote do
+      unquote(left)
+      |> then(fn ksy ->
+        ctx = %{io: io, self: ksy, parents: read_opts.parents}
+        size = trunc(KaitaiStruct.Stream.size(io) - KaitaiStruct.Stream.pos(io))
+
+        Map.put(
+          ksy,
+          unquote(attr.name),
+          KaitaiStruct.Stream.read_bytes_array!(io, size)
+        )
+      end)
+    end
+  end
+
   defp gen_read_step(%{data_type: :bytes} = attr, _mod, left, _opts) do
     quote do
       unquote(left)
       |> then(fn ksy ->
         ctx = %{io: io, self: ksy, parents: read_opts.parents}
-        size = KaitaiToolkit.Struct.parse_expr!(ctx, unquote(attr.attr.size))
+        size = unquote(if is_number(attr.attr.size), do: attr.attr.size, else: quote(do: KaitaiToolkit.Struct.parse_expr!(ctx, unquote(attr.attr.size))))
 
         Map.put(
           ksy,
