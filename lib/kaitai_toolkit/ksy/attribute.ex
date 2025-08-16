@@ -258,5 +258,7 @@ defmodule KaitaiToolkit.Ksy.Attribute do
   defp io(io), do: {:io_stream, io}
 
   defp value(nil), do: nil
-  defp value(value), do: {:io_stream, value}
+  defp value(bool) when is_boolean(bool), do: {:expr, "#{bool}"}
+  defp value(num) when is_number(num), do: {:expr, "#{num}"}
+  defp value(expr_str) when is_binary(expr_str), do: {:expr, expr_str}
 end

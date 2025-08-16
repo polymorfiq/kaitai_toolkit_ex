@@ -64,20 +64,39 @@ defmodule KaitaiToolkitTest.Formats.DnsPacketTest do
         # CNAME
         5::unsigned-integer-big-16,
         # Internet address
-        <<0x00, 0x01>>::binary,
+        1::unsigned-integer-big-16,
         # TTL
         300::unsigned-integer-32,
         # RD Length
-        0::unsigned-integer-16,
+        10::unsigned-integer-16,
+        # Cname body - Label Length
+        4::unsigned-integer-8,
+        # Label
+        "test"::binary,
+        # Label Length
+        3::unsigned-integer-8,
+        # Label
+        "org"::binary,
+        # No more labels
+        0::unsigned-integer-8,
       >>)
 
     packet = CnameDnsPacket.read!(io)
     assert packet.transaction_id == 123
     assert packet.flags.flag == 0
     assert packet.qdcount == 0
-    assert packet.ancount == 0
+    assert packet.ancount == 1
     assert packet.nscount == 0
     assert packet.arcount == 0
+
+    answer = packet.answers |> List.first()
+    assert Enum.at(answer.name.name, 0).name == "test"
+    assert Enum.at(answer.name.name, 1).name == "com"
+    assert Enum.at(answer.name.name, 2).name == ""
+
+    assert Enum.at(answer.payload.name, 0).name == "test"
+    assert Enum.at(answer.payload.name, 1).name == "org"
+    assert Enum.at(answer.payload.name, 2).name == ""
   end
 
   defp binary_stream(bin_data) do

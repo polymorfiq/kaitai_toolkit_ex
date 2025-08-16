@@ -46,7 +46,8 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_runtime_expr(ctx, {:name, name}), do: calculate_property_call(ctx, ctx.self, name)
 
   defp calculate_runtime_expr(ctx, {:property, val, {:name, prop}}) do
-    calculate_property_call(ctx, calculate_runtime_expr(ctx, val), prop)
+    calculated_val_expr = calculate_runtime_expr(ctx, val)
+    calculate_property_call(%{ctx | self: calculated_val_expr}, calculated_val_expr, prop)
   end
 
   defp calculate_runtime_expr(ctx, {:method_call, val, {:name, method}, args}) do
@@ -162,9 +163,6 @@ defmodule KaitaiToolkit.Struct do
     val_b = calculate_runtime_expr(ctx, b)
 
     case {val_a, val_b} do
-      {nil, nil} -> true
-      {_, nil} -> true
-      {nil, _} -> false
       {a, b} when is_number(a) and is_number(b) -> a >= b
     end
   end
@@ -249,7 +247,6 @@ defmodule KaitaiToolkit.Struct do
     end
   end
 
-  defp calculate_property_call(_, nil, _), do: nil
   defp calculate_property_call(ctx, int, "to_s") when is_integer(int), do: calculate_method_call(ctx, int, "to_s", [])
   defp calculate_property_call(ctx, float, "to_i") when is_float(float), do: calculate_method_call(ctx, float, "to_i", [])
   defp calculate_property_call(ctx, bool, "to_i") when is_boolean(bool), do: calculate_method_call(ctx, bool, "to_i", [])
@@ -268,18 +265,20 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_property_call(ctx, stream, "eof") when is_pid(stream), do: calculate_method_call(ctx, stream, "eof", [])
   defp calculate_property_call(ctx, stream, "size") when is_pid(stream), do: calculate_method_call(ctx, stream, "size", [])
   defp calculate_property_call(ctx, stream, "pos") when is_pid(stream), do: calculate_method_call(ctx, stream, "pos", [])
-  defp calculate_property_call(_, data, key_name) when is_map(data) do
+  defp calculate_property_call(ctx, data, key_name) when is_map(data) do
     key = String.to_existing_atom(key_name)
 
-    cond do
-      val = Map.get(data, key) -> val
-      true ->
-        {:unknown_name, key}
+    case Map.get(data, key) do
+      {:instance, instance_fn} ->
+        instance_fn.(ctx)
+
+      {:value_instance, instance_fn} ->
+        instance_fn.(ctx)
+
+      val ->
+        val
     end
   end
-
-
-  defp calculate_method_call(_, nil, _, _), do: nil
 
   defp calculate_method_call(_, int, "to_s", []) when is_integer(int) do
     {:string, "#{int}"}

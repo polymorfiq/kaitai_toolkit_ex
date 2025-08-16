@@ -208,7 +208,7 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
       >>)
 
     list_of_things = RuntimeStringToInteger.read!(io)
-    assert [] = list_of_things.things
+    assert [102] = list_of_things.things
   end
 
   test "can handle a parent call" do

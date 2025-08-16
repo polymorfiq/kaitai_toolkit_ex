@@ -46,12 +46,12 @@ defmodule KaitaiToolkit.Generation do
 
   defp gen_module_defstruct(mod) do
     quote do
-      defstruct unquote(mod.attrs |> Enum.map(&String.to_atom(&1.name)))
+      defstruct unquote(mod.attrs |> Enum.map(& &1.name))
     end
   end
 
   defp gen_module_typespec(mod) do
-    type_spec = {:%{}, [], Enum.map(mod.attrs, &{String.to_atom(&1.name), &1.elixir_type})}
+    type_spec = {:%{}, [], Enum.map(mod.attrs, &{&1.name, &1.elixir_type})}
     struct_spec = {:%, [], [{:__MODULE__, [], Elixir}, type_spec]}
 
     quote do
@@ -74,15 +74,76 @@ defmodule KaitaiToolkit.Generation do
       end
 
     base_map = quote do: %__MODULE__{}
+    base_with_instances = gen_instance_steps(mod, base_map, mod.instances, opts)
 
     read_def =
       quote do
         def read!(io, read_opts \\ %{parents: []}) do
-          unquote(gen_read_steps(mod, base_map, mod.attrs, opts))
+          unquote(gen_read_steps(mod, base_with_instances, mod.attrs, opts))
         end
       end
 
-    [read_spec, read_def]
+    attr_functions = mod.attrs |> Enum.flat_map(fn attr ->
+      fn_def = quote do
+        defp unquote(:"read_#{attr.name}!")(io, ksy, read_opts) do
+          unquote(gen_read_step(attr, mod, quote(do: ksy), opts))
+        end
+      end
+
+      [fn_def]
+    end)
+
+    instance_functions = mod.instances |> Enum.flat_map(fn attr ->
+      fn_def = quote do
+        defp unquote(:"instance_#{attr.name}!")(io, ksy, read_opts) do
+          unquote(gen_instance_step(attr, mod, quote(do: ksy), opts))
+        end
+      end
+
+      [fn_def]
+    end)
+
+    [read_spec, read_def] ++ attr_functions ++ instance_functions
+  end
+
+  defp gen_instance_steps(_mod, left, [], _opts) do
+    quote do
+      unquote(left)
+    end
+  end
+
+  defp gen_instance_steps(mod, left, [attr | rest_attrs], opts) do
+    with_step = quote do
+      unquote(left)
+      |> then(fn ksy -> unquote(:"instance_#{attr.name}!")(io, ksy, read_opts) end)
+    end
+
+    gen_instance_steps(mod, with_step, rest_attrs, opts)
+  end
+
+  defp gen_instance_step(%{value: {:expr, expr_str}} = attr, _mod, left, _opts) do
+    quote do
+      unquote(left)
+      |> Map.put(unquote(attr.name), {:value_instance, fn ctx ->
+        KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
+      end})
+    end
+  end
+
+  defp gen_instance_step(%{pos: {:expr, expr_str}} = attr, mod, left, opts) do
+    quote do
+      unquote(left)
+      |> Map.put(unquote(attr.name), {:instance, fn ctx ->
+        pos = KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
+        orig_pos = KaitaiStruct.Stream.pos(io)
+        :ok = KaitaiStruct.Stream.seek(io, pos)
+
+        val = unquote(gen_read_step(attr, mod, quote(do: ctx.self), opts))
+        :ok = KaitaiStruct.Stream.seek(io, orig_pos)
+
+        val
+      end})
+    end
   end
 
   defp gen_read_steps(_mod, left, [], _opts) do
@@ -92,8 +153,10 @@ defmodule KaitaiToolkit.Generation do
   end
 
   defp gen_read_steps(mod, left, [attr | rest_attrs], opts) do
-    _attr_id = String.to_atom(attr.name)
-    with_step = gen_read_step(attr, mod, left, opts)
+    with_step = quote do
+      unquote(left)
+      |> then(fn ksy -> unquote(:"read_#{attr.name}!")(io, ksy, read_opts) end)
+    end
 
     gen_read_steps(mod, with_step, rest_attrs, opts)
   end
@@ -119,7 +182,7 @@ defmodule KaitaiToolkit.Generation do
       |> then(fn ksy ->
         Map.put(
           ksy,
-          unquote(String.to_atom(attr.name)),
+          unquote(attr.name),
           KaitaiStruct.Stream.repeat(io, :eos, fn io, _ ->
             unquote(gen_read_fn(data_type, opts))
           end)
@@ -139,7 +202,7 @@ defmodule KaitaiToolkit.Generation do
       |> then(fn ksy ->
         Map.put(
           ksy,
-          unquote(String.to_atom(attr.name)),
+          unquote(attr.name),
           Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(unquote(num_repeats)), fn _idx ->
             unquote(gen_read_fn(data_type, opts))
           end)
@@ -167,7 +230,7 @@ defmodule KaitaiToolkit.Generation do
                 unquote(gen_read_fn(data_type, opts))
               end)
 
-            Map.put(ksy, unquote(String.to_atom(attr.name)), val)
+            Map.put(ksy, unquote(attr.name), val)
         end
       end)
     end
@@ -186,14 +249,16 @@ defmodule KaitaiToolkit.Generation do
           Stream.repeatedly(fn -> 1 end)
           |> Enum.reduce_while([], fn _, acc ->
             ctx = %{io: io, self: acc, parents: [ksy | read_opts.parents]}
-            until_state = KaitaiToolkit.Struct.parse_expr!(ctx, unquote(until_expr))
+            until_state =
+              if Enum.count(acc) > 0,
+                 do: KaitaiToolkit.Struct.parse_expr!(ctx, unquote(until_expr))
 
             if until_state,
               do: {:halt, Enum.reverse(acc)},
               else: {:cont, [unquote(gen_read_fn(data_type, opts)) | acc]}
           end)
 
-        Map.put(ksy, unquote(String.to_atom(attr.name)), val)
+        Map.put(ksy, unquote(attr.name), val)
       end)
     end
   end
@@ -207,7 +272,7 @@ defmodule KaitaiToolkit.Generation do
 
         Map.put(
           ksy,
-          unquote(String.to_atom(attr.name)),
+          unquote(attr.name),
           KaitaiStruct.Stream.read_bytes_array!(io, size)
         )
       end)
@@ -215,7 +280,7 @@ defmodule KaitaiToolkit.Generation do
   end
 
   defp gen_read_step(%{data_type: :io} = attr, _mod, left, _opts),
-    do: quote(do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), io))
+    do: quote(do: unquote(left) |> Map.put(unquote(attr.name), io))
 
   defp gen_read_step(%{data_type: :str} = attr, _mod, left, _opts) do
     quote do
@@ -226,7 +291,7 @@ defmodule KaitaiToolkit.Generation do
 
         Map.put(
           ksy,
-          unquote(String.to_atom(attr.name)),
+          unquote(attr.name),
           KaitaiStruct.Stream.read_bytes_array!(io, size)
         )
       end)
@@ -237,7 +302,7 @@ defmodule KaitaiToolkit.Generation do
     quote do
       unquote(left)
       |> Map.put(
-        unquote(String.to_atom(attr.name)),
+        unquote(attr.name),
         KaitaiStruct.Stream.read_bytes_term!(
           io,
           unquote(attr.attr.encoding || "UTF-8"),
@@ -250,12 +315,11 @@ defmodule KaitaiToolkit.Generation do
     end
   end
 
-  defp gen_read_step(%{data_type: %{switch_on: switch_on, cases: cases}}, _mod, left, opts) do
+  defp gen_read_step(%{data_type: %{switch_on: switch_on, cases: cases}} = attr, _mod, left, opts) do
     ksy = Keyword.fetch!(opts, :ksy)
 
     quote do
       unquote(left) |> then(fn ksy ->
-        ksy |> IO.inspect(label: "ksy")
         ctx = %{io: io, self: ksy, parents: read_opts.parents}
         switch_val = KaitaiToolkit.Struct.parse_expr!(ctx, {:expr, unquote(switch_on)})
 
@@ -274,7 +338,7 @@ defmodule KaitaiToolkit.Generation do
           {switch_key, quote(do: fn -> unquote(gen_read_fn(val, opts)) end)}
         end)})
 
-        Map.fetch!(val_to_type, switch_val).()
+        Map.put(ksy, unquote(attr.name), Map.fetch!(val_to_type, switch_val).())
       end)
     end
   end
@@ -282,7 +346,7 @@ defmodule KaitaiToolkit.Generation do
   defp gen_read_step(%{data_type: data_type} = attr, _mod, left, opts) do
     quote do
       unquote(left)
-      |> then(fn ksy -> Map.put(ksy, unquote(String.to_atom(attr.name)), unquote(gen_read_fn(data_type, opts))) end)
+      |> then(fn ksy -> Map.put(ksy, unquote(attr.name), unquote(gen_read_fn(data_type, opts))) end)
     end
   end
 
@@ -380,7 +444,7 @@ defmodule KaitaiToolkit.Generation do
             else: data_type_to_elixir(attr.type, type_root)
 
         %Attribute{
-          name: attr.id,
+          name: String.to_atom(attr.id),
           elixir_type: attr_type,
           data_type: attr.type,
           if: attr.if,
@@ -406,14 +470,16 @@ defmodule KaitaiToolkit.Generation do
              do: [data_type_to_elixir(attr.type, type_root)],
              else: data_type_to_elixir(attr.type, type_root)
 
-         {inst_id, %Attribute{
-          name: attr.id,
-          elixir_type: attr_type,
-          data_type: attr.type,
-          if: attr.if,
-          repeat: repeat,
-          attr: attr
-        }}
+         %Attribute{
+           name: inst_id,
+           elixir_type: attr_type,
+           data_type: attr.type,
+           if: attr.if,
+           pos: attr.pos,
+           value: attr.value,
+           repeat: repeat,
+           attr: attr
+         }
       end)
 
     %KaitaiModule{name: mod_name, attrs: attrs, instances: instances, deps: deps}
