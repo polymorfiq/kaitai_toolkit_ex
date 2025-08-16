@@ -246,7 +246,6 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
     assert [1, 2, 3] = list_of_things.thing.things
   end
 
-
   test "can handle a nested parent call" do
     defmodule RuntimeNestedParentExpression do
       use KaitaiToolkit.Struct,
@@ -300,6 +299,35 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
     assert [1] == list_of_things.thing.single_things
     assert [2] == list_of_things.thing.double.single_double_things
     assert [3, 4, 5] == list_of_things.thing.double.double_things
+  end
+
+
+  test "can handle a stream ops" do
+    defmodule RuntimeStreamOps do
+      use KaitaiToolkit.Struct,
+          contents: """
+            meta:
+              id: list_of_things
+              title: A bunch of things
+            seq:
+              - id: half_the_things
+                size: _io.size / 2
+              - id: other_half_the_things
+                size: _io.size / 2
+          """
+    end
+
+    io =
+      binary_stream(<<
+        1::signed-integer-8,
+        2::signed-integer-8,
+        3::signed-integer-8,
+        4::signed-integer-8,
+      >>)
+
+    list_of_things = RuntimeStreamOps.read!(io)
+    assert <<1, 2>> == list_of_things.half_the_things
+    assert <<3, 4>> == list_of_things.other_half_the_things
   end
 
   defp binary_stream(bin_data) do

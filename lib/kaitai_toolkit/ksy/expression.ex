@@ -1005,6 +1005,8 @@ defmodule KaitaiToolkit.Ksy.Expression do
   defp parse_pemdas_process([], _, _, seen), do: seen
 
   defp math_obj?({:parens, _}), do: true
+  defp math_obj?({:property, _, _}), do: true
+  defp math_obj?({:method_call, _, _, _}), do: true
   defp math_obj?({op, _, _}) when op in @math_ops, do: true
   defp math_obj?({operand, _}) when operand in @math_operands, do: true
   defp math_obj?(operand) when is_binary(operand), do: true
