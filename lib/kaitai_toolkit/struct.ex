@@ -118,8 +118,8 @@ defmodule KaitaiToolkit.Struct do
     case {val_a, val_b} do
       {{:string, a}, {:string, b}} -> a == b
       {nil, nil} -> true
-      {a, nil} -> false
-      {nil, b} -> false
+      {_, nil} -> false
+      {nil, _} -> false
       {a, b} when is_number(a) and is_number(b) -> a == b
       {a, b} when is_boolean(a) and is_boolean(b) -> a == b
       {a, b} when is_binary(a) and is_binary(b) -> a == b
@@ -163,8 +163,8 @@ defmodule KaitaiToolkit.Struct do
 
     case {val_a, val_b} do
       {nil, nil} -> true
-      {a, nil} -> true
-      {nil, b} -> false
+      {_, nil} -> true
+      {nil, _} -> false
       {a, b} when is_number(a) and is_number(b) -> a >= b
     end
   end
@@ -249,7 +249,7 @@ defmodule KaitaiToolkit.Struct do
     end
   end
 
-  defp calculate_property_call(ctx, nil, _), do: nil
+  defp calculate_property_call(_, nil, _), do: nil
   defp calculate_property_call(ctx, int, "to_s") when is_integer(int), do: calculate_method_call(ctx, int, "to_s", [])
   defp calculate_property_call(ctx, float, "to_i") when is_float(float), do: calculate_method_call(ctx, float, "to_i", [])
   defp calculate_property_call(ctx, bool, "to_i") when is_boolean(bool), do: calculate_method_call(ctx, bool, "to_i", [])
@@ -268,7 +268,7 @@ defmodule KaitaiToolkit.Struct do
   defp calculate_property_call(ctx, stream, "eof") when is_pid(stream), do: calculate_method_call(ctx, stream, "eof", [])
   defp calculate_property_call(ctx, stream, "size") when is_pid(stream), do: calculate_method_call(ctx, stream, "size", [])
   defp calculate_property_call(ctx, stream, "pos") when is_pid(stream), do: calculate_method_call(ctx, stream, "pos", [])
-  defp calculate_property_call(ctx, data, key_name) when is_map(data) do
+  defp calculate_property_call(_, data, key_name) when is_map(data) do
     key = String.to_existing_atom(key_name)
 
     cond do
