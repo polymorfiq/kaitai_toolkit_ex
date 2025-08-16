@@ -28,7 +28,7 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
   end
 
   test "handles booleans" do
-    assert ["abc", :not_equals, true] = Expression.lex("abc != true")
+    assert ["abc", :is_not_equal, true] = Expression.lex("abc != true")
     assert ["abc", :is_equal, false] = Expression.lex("abc == false")
   end
 
@@ -73,10 +73,10 @@ defmodule KaitaiToolkitTest.Expressions.LexTest do
   end
 
   test "handles arrows" do
-    assert ["abc", :left_arrow, {:integer, 123}] = Expression.lex("abc < 123")
-    assert ["abc", :right_arrow, {:integer, 123}] = Expression.lex("abc > 123")
-    assert ["abc", :lt_or_equals, {:integer, 123}] = Expression.lex("abc <= 123")
-    assert ["abc", :gt_or_equals, {:integer, 123}] = Expression.lex("abc >= 123")
+    assert ["abc", :is_lt, {:integer, 123}] = Expression.lex("abc < 123")
+    assert ["abc", :is_gt, {:integer, 123}] = Expression.lex("abc > 123")
+    assert ["abc", :is_lt_or_equal, {:integer, 123}] = Expression.lex("abc <= 123")
+    assert ["abc", :is_gt_or_equal, {:integer, 123}] = Expression.lex("abc >= 123")
   end
 
   test "handles brackets" do

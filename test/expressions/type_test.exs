@@ -12,14 +12,14 @@ defmodule KaitaiToolkitTest.Expressions.TypeTest do
   end
 
   test "handles integers correctly" do
-    assert :integer = TypeSystem.type!({:literal, 123})
+    assert :integer = TypeSystem.type!(123)
     assert :integer = type_string!("1 + 2")
     assert :integer = type_string!("3 * 52")
     assert :integer = type_string!("3 * 52 / 2")
   end
 
   test "handles floats correctly" do
-    assert :float = TypeSystem.type!({:literal, 123.2})
+    assert :float = TypeSystem.type!(123.2)
     assert :float = type_string!("1.0 + 2.0")
     assert :float = type_string!("1.0 + 2")
     assert :float = type_string!("1 + 2.0")
@@ -28,35 +28,28 @@ defmodule KaitaiToolkitTest.Expressions.TypeTest do
   end
 
   test "handles arrays of integers correctly" do
-    assert {:array, :integer} =
-             TypeSystem.type!({:array, [{:literal, 123}, {:literal, 456}, {:literal, -789}]})
+    assert {:array, :integer} = TypeSystem.type!([123, 456, -789])
 
     assert {:array, :integer} =
              type_string!("[0x41_AC, 0b1101, 3242252543666435675636554242534636]")
   end
 
   test "handles arrays of floats correctly" do
-    assert {:array, :float} =
-             TypeSystem.type!(
-               {:array, [{:literal, 123.0}, {:literal, 456.2}, {:literal, -789.3}]}
-             )
-
+    assert {:array, :float} = TypeSystem.type!([123.0, 456.2, -789.3])
     assert {:array, :float} = type_string!("[3.2, 15.3e-3, 1_5._3e-3, 523_123.24_245]")
   end
 
   test "handles arrays of strings correctly" do
-    assert {:array, :string} =
-             TypeSystem.type!({:array, [{:string, "a"}, {:string, "b"}, {:string, "c"}]})
-
+    assert {:array, :string} = TypeSystem.type!([{:string, "a"}, {:string, "b"}, {:string, "c"}])
     assert {:array, :string} = type_string!(~S|["d", "ef", "g"]|)
     assert {:array, :string} = type_string!(~S|([("d"), "ef", "g"])|)
   end
 
   test "handles add correctly" do
-    assert :integer = TypeSystem.type!({:add, {:literal, 3}, {:literal, 2}})
-    assert :float = TypeSystem.type!({:add, {:literal, 3}, {:literal, 2.0}})
-    assert :float = TypeSystem.type!({:add, {:literal, 3.0}, {:literal, 2}})
-    assert :float = TypeSystem.type!({:add, {:literal, 3.0}, {:literal, 2.0}})
+    assert :integer = TypeSystem.type!({:add, 3, 2})
+    assert :float = TypeSystem.type!({:add, 3, 2.0})
+    assert :float = TypeSystem.type!({:add, 3.0, 2})
+    assert :float = TypeSystem.type!({:add, 3.0, 2.0})
     assert :string = TypeSystem.type!({:add, {:string, "a"}, {:string, "b"}})
 
     assert :integer = type_string!("1 + 3 + (5)")
@@ -68,11 +61,10 @@ defmodule KaitaiToolkitTest.Expressions.TypeTest do
   end
 
   test "handles subtract correctly" do
-    assert :integer = TypeSystem.type!({:subtract, {:literal, 3}, {:literal, 2}})
-    assert :float = TypeSystem.type!({:subtract, {:literal, 3}, {:literal, 2.0}})
-    assert :float = TypeSystem.type!({:subtract, {:literal, 3.0}, {:literal, 2}})
-    assert :float = TypeSystem.type!({:subtract, {:literal, 3.0}, {:literal, 2.0}})
-    assert :string = TypeSystem.type!({:subtract, {:string, "a"}, {:string, "b"}})
+    assert :integer = TypeSystem.type!({:subtract, 3, 2})
+    assert :float = TypeSystem.type!({:subtract, 3, 2.0})
+    assert :float = TypeSystem.type!({:subtract, 3.0, 2})
+    assert :float = TypeSystem.type!({:subtract, 3.0, 2.0})
 
     assert :integer = type_string!("1 - 3 - (5)")
     assert :float = type_string!("1 - 2.0 - 2")
@@ -83,11 +75,10 @@ defmodule KaitaiToolkitTest.Expressions.TypeTest do
   end
 
   test "handles multiply correctly" do
-    assert :integer = TypeSystem.type!({:multiply, {:literal, 3}, {:literal, 2}})
-    assert :float = TypeSystem.type!({:multiply, {:literal, 3}, {:literal, 2.0}})
-    assert :float = TypeSystem.type!({:multiply, {:literal, 3.0}, {:literal, 2}})
-    assert :float = TypeSystem.type!({:multiply, {:literal, 3.0}, {:literal, 2.0}})
-    assert :string = TypeSystem.type!({:multiply, {:string, "a"}, {:string, "b"}})
+    assert :integer = TypeSystem.type!({:multiply, 3, 2})
+    assert :float = TypeSystem.type!({:multiply, 3, 2.0})
+    assert :float = TypeSystem.type!({:multiply, 3.0, 2})
+    assert :float = TypeSystem.type!({:multiply, 3.0, 2.0})
 
     assert :integer = type_string!("1 * 3 * (5)")
     assert :float = type_string!("1 * 2.0 * 2")
@@ -98,11 +89,10 @@ defmodule KaitaiToolkitTest.Expressions.TypeTest do
   end
 
   test "handles divide correctly" do
-    assert :integer = TypeSystem.type!({:multiply, {:literal, 3}, {:literal, 2}})
-    assert :float = TypeSystem.type!({:multiply, {:literal, 3}, {:literal, 2.0}})
-    assert :float = TypeSystem.type!({:multiply, {:literal, 3.0}, {:literal, 2}})
-    assert :float = TypeSystem.type!({:multiply, {:literal, 3.0}, {:literal, 2.0}})
-    assert :string = TypeSystem.type!({:multiply, {:string, "a"}, {:string, "b"}})
+    assert :integer = TypeSystem.type!({:divide, 3, 2})
+    assert :float = TypeSystem.type!({:divide, 3, 2.0})
+    assert :float = TypeSystem.type!({:divide, 3.0, 2})
+    assert :float = TypeSystem.type!({:divide, 3.0, 2.0})
 
     assert :integer = type_string!("1 / 3")
     assert :float = type_string!("1/2.0")
@@ -114,17 +104,17 @@ defmodule KaitaiToolkitTest.Expressions.TypeTest do
 
   test "handles mixed math correctly" do
     assert :integer =
-             TypeSystem.type!({:multiply, {:literal, 3}, {:add, {:literal, 3}, {:literal, 2}}})
+             TypeSystem.type!({:multiply, 3, {:add, 3, 2}})
 
     assert :float =
-             TypeSystem.type!({:multiply, {:literal, 3}, {:add, {:literal, 3.0}, {:literal, 2}}})
+             TypeSystem.type!({:multiply, 3, {:add, 3.0, 2}})
 
     assert :float =
-             TypeSystem.type!({:multiply, {:literal, 3.0}, {:add, {:literal, 3}, {:literal, 2}}})
+             TypeSystem.type!({:multiply, 3.0, {:add, 3, 2}})
 
     assert :float =
              TypeSystem.type!(
-               {:multiply, {:literal, 3.0}, {:add, {:literal, 3}, {:literal, 2.0}}}
+               {:multiply, 3.0, {:add, 3, 2.0}}
              )
 
     assert :integer = type_string!("1 / 3*3")

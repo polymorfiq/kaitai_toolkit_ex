@@ -142,38 +142,58 @@ defmodule KaitaiToolkit.Generation do
     quote do
       unquote(left)
       |> then(fn ksy ->
-        repeat_val = KaitaiToolkit.Struct.parse_expr!(ksy, unquote(repeat_expr))
+        repeat_val = KaitaiToolkit.Struct.parse_expr!(ksy, nil, unquote(repeat_expr))
 
         case repeat_val do
-          {:literal, repeat_count} when is_integer(repeat_count) ->
-            Map.put(
-              ksy,
-              unquote(String.to_atom(attr.name)),
-              Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(repeat_count), fn _idx ->
-                unquote(gen_read_fn(data_type, opts))
-              end)
-            )
+          repeat_count when is_integer(repeat_count) ->
+            val = Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(repeat_count), fn _idx ->
+              unquote(gen_read_fn(data_type, opts))
+            end)
+
+            Map.put(ksy, unquote(String.to_atom(attr.name)), val)
         end
       end)
     end
   end
 
-  defp gen_read_step(%{data_type: :bytes} = attr, _mod, left, _opts),
-    do:
-      quote(
-        do:
-          unquote(left)
-          |> then(
-            &Map.put(
-              &1,
-              unquote(String.to_atom(attr.name)),
-              KaitaiStruct.Stream.read_bytes_array!(
-                io,
-                KaitaiToolkit.Struct.parse_expr!(&1, unquote(attr.attr.size))
-              )
-            )
-          )
-      )
+  defp gen_read_step(
+         %{data_type: data_type, repeat: {:repeat_until, until_expr}} = attr,
+         _mod,
+         left,
+         opts
+       ) do
+    quote do
+      unquote(left)
+      |> then(fn ksy ->
+        val = Stream.repeatedly(fn -> 1 end)
+        |> Enum.reduce_while([], fn _, acc ->
+          until_state = KaitaiToolkit.Struct.parse_expr!(ksy, acc, unquote(until_expr))
+
+          if until_state,
+            do: {:halt, Enum.reverse(acc)},
+            else: {:cont, [unquote(gen_read_fn(data_type, opts)) | acc]}
+        end)
+
+        Map.put(ksy, unquote(String.to_atom(attr.name)), val)
+      end)
+    end
+  end
+
+  defp gen_read_step(%{data_type: :bytes} = attr, _mod, left, _opts) do
+    quote do
+      unquote(left)
+      |> then(
+           &Map.put(
+             &1,
+             unquote(String.to_atom(attr.name)),
+             KaitaiStruct.Stream.read_bytes_array!(
+               io,
+               KaitaiToolkit.Struct.parse_expr!(&1, unquote(attr.attr.size))
+             )
+           )
+         )
+    end
+  end
 
   defp gen_read_step(%{data_type: :io} = attr, _mod, left, _opts),
     do: quote(do: unquote(left) |> Map.put(unquote(String.to_atom(attr.name)), io))

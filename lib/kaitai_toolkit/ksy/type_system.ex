@@ -8,10 +8,19 @@ defmodule KaitaiToolkit.Ksy.TypeSystem do
   end
 
   @spec type(tuple()) :: {:ok, atom() | tuple()} | {:error, term()}
-  def type({:literal, int}) when is_integer(int), do: {:ok, :integer}
-  def type({:literal, float}) when is_float(float), do: {:ok, :float}
+  def type(int) when is_integer(int), do: {:ok, :integer}
+  def type(float) when is_float(float), do: {:ok, :float}
   def type({:string, _}), do: {:ok, :string}
   def type({:name, name}), do: {:ok, {:runtime_value, name}}
+  def type({:logical_or, _, _}), do: {:ok, :boolean}
+  def type({:logical_and, _, _}), do: {:ok, :boolean}
+  def type({:logical_not, _}), do: {:ok, :boolean}
+  def type({:equals, _, _}), do: {:ok, :boolean}
+  def type({:not_equals, _, _}), do: {:ok, :boolean}
+  def type({:greater_than, _, _}), do: {:ok, :boolean}
+  def type({:less_than, _, _}), do: {:ok, :boolean}
+  def type({:gt_or_equals, _, _}), do: {:ok, :boolean}
+  def type({:lt_or_equals, _, _}), do: {:ok, :boolean}
 
   @math_ops [:multiply, :divide, :add, :subtract]
   def type({math_op, a, b}) when math_op in @math_ops do
@@ -47,7 +56,7 @@ defmodule KaitaiToolkit.Ksy.TypeSystem do
     end
   end
 
-  def type({:array, items}) do
+  def type(items) when is_list(items) do
     Enum.reduce_while(items, {:ok, {:array, nil}}, fn
       item, {:ok, {:array, nil}} ->
         with {:ok, item_t} <- type(item) do

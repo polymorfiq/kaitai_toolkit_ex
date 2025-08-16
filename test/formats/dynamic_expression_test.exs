@@ -62,16 +62,16 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
   test "can handle constant expression repeat-expr" do
     defmodule StaticRepeatExpr do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_things
-              title: A bunch of things
-            seq:
-              - id: things
-                type: s4
-                repeat: expr
-                repeat-expr: 3 * 2
-          """
+        contents: """
+          meta:
+            id: list_of_things
+            title: A bunch of things
+          seq:
+            - id: things
+              type: s4
+              repeat: expr
+              repeat-expr: 3 * 2
+        """
     end
 
     io =
@@ -81,7 +81,7 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
         42::signed-integer-32,
         24::signed-integer-32,
         -523::signed-integer-32,
-        5631::signed-integer-32,
+        5631::signed-integer-32
       >>)
 
     list_of_things = StaticRepeatExpr.read!(io)
@@ -91,32 +91,97 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
   test "can handle runtime-dependent repeat-expr" do
     defmodule RuntimeDependentRepeat do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_things
-              title: A bunch of things
-            seq:
-              - id: num_of_things
-                type: u4
-              - id: things
-                type: s2
-                repeat: expr
-                repeat-expr: num_of_things * 2
-          """
+        contents: """
+          meta:
+            id: list_of_things
+            title: A bunch of things
+          seq:
+            - id: num_of_things
+              type: u4
+            - id: things
+              type: s2
+              repeat: expr
+              repeat-expr: num_of_things * 2
+        """
     end
 
     io =
       binary_stream(<<
-        2::unsigned-integer-32, # num_of_things
+        # num_of_things
+        2::unsigned-integer-32,
         102::signed-integer-16,
         633::signed-integer-16,
         -345::signed-integer-16,
-        71::signed-integer-16,
+        71::signed-integer-16
       >>)
 
     list_of_things = RuntimeDependentRepeat.read!(io)
     assert 2 = list_of_things.num_of_things
     assert [102, 633, -345, 71] = list_of_things.things
+  end
+
+  test "can handle more complicated runtime-dependent repeat-expr" do
+    defmodule ComplicatedRuntimeDependentRepeat do
+      use KaitaiToolkit.Struct,
+        contents: """
+          meta:
+            id: list_of_things
+            title: A bunch of things
+          seq:
+            - id: num_of_things
+              type: u4
+            - id: num_of_things_multiplier
+              type: u4
+            - id: things
+              type: s2
+              repeat: expr
+              repeat-expr: num_of_things * (num_of_things_multiplier + 1)
+        """
+    end
+
+    io =
+      binary_stream(<<
+        # num_of_things
+        2::unsigned-integer-32,
+        # num_of_things_multiplier
+        1::unsigned-integer-32,
+        102::signed-integer-16,
+        633::signed-integer-16,
+        -345::signed-integer-16,
+        71::signed-integer-16
+      >>)
+
+    list_of_things = ComplicatedRuntimeDependentRepeat.read!(io)
+    assert 2 = list_of_things.num_of_things
+    assert 1 = list_of_things.num_of_things_multiplier
+    assert [102, 633, -345, 71] = list_of_things.things
+  end
+
+  test "can handle basic repeat-until" do
+    defmodule RuntimeRepeatUntil do
+      use KaitaiToolkit.Struct,
+        contents: """
+          meta:
+            id: list_of_things
+            title: A bunch of things
+          seq:
+            - id: things
+              type: s2
+              repeat: until
+              repeat-until: _.length <= -5 or _.length > 3
+        """
+    end
+
+    io =
+      binary_stream(<<
+        102::signed-integer-16,
+        634::signed-integer-16,
+        7234::signed-integer-16,
+        522::signed-integer-16
+      >>)
+
+    list_of_things = RuntimeRepeatUntil.read!(io)
+    assert [102, 634, 7234, 522] = list_of_things.things
   end
 
   defp binary_stream(bin_data) do

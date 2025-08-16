@@ -21,46 +21,238 @@ defmodule KaitaiToolkit.Struct do
     generated
   end
 
-  @spec parse_expr!(map(), term()) :: term()
-  def parse_expr!(data, {:expr, expr_str}) do
+  @spec parse_expr!(map(), term(), term()) :: term()
+  def parse_expr!(data, self, {:expr, expr_str}) do
+    ctx = %{data: data, self: self}
     parsed = expr_str |> Expression.lex() |> Expression.parse()
 
-    case calculate_runtime_expr(data, parsed) do
-      num when is_integer(num) -> {:literal, num}
-      num when is_float(num) -> {:literal, num}
-      val when is_binary(val) -> {:string, val}
+    calculate_runtime_expr(ctx, parsed)
+  end
+
+  defp calculate_runtime_expr(_ctx, val) when is_number(val), do: val
+  defp calculate_runtime_expr(_ctx, val) when is_binary(val), do: val
+  defp calculate_runtime_expr(_ctx, val) when is_boolean(val), do: val
+  defp calculate_runtime_expr(ctx, vals) when is_list(vals), do: Enum.map(vals, &calculate_runtime_expr(ctx, &1))
+  defp calculate_runtime_expr(ctx, {:name, name}), do: Map.fetch!(ctx.data, String.to_atom(name))
+
+  defp calculate_runtime_expr(%{self: int}, {:property, :self, {:name, "to_s"}}) when is_integer(int) do
+    "#{int}"
+  end
+
+  defp calculate_runtime_expr(%{self: float}, {:property, :self, {:name, "to_s"}}) when is_float(float) do
+    trunc(float)
+  end
+
+  defp calculate_runtime_expr(%{self: list}, {:property, :self, {:name, "length"}}) when is_list(list) do
+    Enum.count(list)
+  end
+
+  defp calculate_runtime_expr(%{self: byte_array}, {:property, :self, {:name, "length"}}) when is_binary(byte_array) do
+    byte_size(byte_array)
+  end
+
+  defp calculate_runtime_expr(%{self: byte_array}, {:method_call, :self, {:name, "to_s"}, [{:string, "UTF-8"}]}) when is_binary(byte_array) do
+    {:string, {:unicode.characters_to_binary(byte_array, {:utf8, :big})}}
+  end
+
+  defp calculate_runtime_expr(%{self: byte_array}, {:method_call, :self, {:name, "to_s"}, [{:string, "UTF-16"}]}) when is_binary(byte_array) do
+    {:string, {:unicode.characters_to_binary(byte_array, {:utf16, :big})}}
+  end
+
+  defp calculate_runtime_expr(%{self: byte_array}, {:method_call, :self, {:name, "to_s"}, [{:string, "UTF-16LE"}]}) when is_binary(byte_array) do
+    {:string, {:unicode.characters_to_binary(byte_array, {:utf16, :little})}}
+  end
+
+  defp calculate_runtime_expr(%{self: {:string, str}}, {:property, :self, {:name, "length"}}) do
+    String.length(str)
+  end
+
+  defp calculate_runtime_expr(ctx, {:multiply, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_integer(a) and is_number(b) -> floor(a * b)
+      {a, b} when is_number(a) and is_integer(b) -> floor (a * b)
+      {a, b} when is_number(a) and is_number(b) -> a * b
     end
   end
 
-  defp calculate_runtime_expr(_data, {:literal, val}), do: val
-  defp calculate_runtime_expr(data, {:name, name}), do: Map.fetch!(data, String.to_atom(name))
+  defp calculate_runtime_expr(ctx, {:divide, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
 
-  defp calculate_runtime_expr(data, {:multiply, a, b}) do
-    calculate_runtime_expr(data, a) * calculate_runtime_expr(data, b)
+    case {val_a, val_b} do
+      {a, b} when is_integer(a) and is_number(b) -> div(a, b)
+      {a, b} when is_number(a) and is_integer(b) -> div(a, b)
+      {a, b} when is_number(a) and is_number(b) -> a / b
+    end
   end
 
-  defp calculate_runtime_expr(data, {:divide, a, b}) do
-    val_a = calculate_runtime_expr(data, a)
-    val_b = calculate_runtime_expr(data, b)
+  defp calculate_runtime_expr(ctx, {:add, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
 
-    if is_integer(val_a) || is_integer(val_b),
-       do: div(a, b),
-       else: a / b
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> a + b
+      {a, b} when is_binary(a) and is_binary(b) -> a <> b
+    end
   end
 
-  defp calculate_runtime_expr(data, {:add, a, b}) do
-    calculate_runtime_expr(data, a) + calculate_runtime_expr(data, b)
+  defp calculate_runtime_expr(ctx, {:subtract, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> a - b
+    end
   end
 
-  defp calculate_runtime_expr(data, {:subtract, a, b}) do
-    calculate_runtime_expr(data, a) - calculate_runtime_expr(data, b)
+  defp calculate_runtime_expr(ctx, {:modulo, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> Expression.modulo(a, b)
+    end
   end
 
-  defp calculate_runtime_expr(data, {:modulo, a, b}) do
-    rem(calculate_runtime_expr(data, a), calculate_runtime_expr(data, b))
+  defp calculate_runtime_expr(ctx, {:negative, val}) do
+    val = calculate_runtime_expr(ctx, val)
+
+    case val do
+      val when is_number(val) -> -val
+    end
   end
 
-  defp calculate_runtime_expr(data, {:negative, val}) do
-    -calculate_runtime_expr(data, val)
+  defp calculate_runtime_expr(ctx, {:equals, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> a == b
+      {a, b} when is_boolean(a) and is_boolean(b) -> a == b
+      {a, b} when is_binary(a) and is_binary(b) -> a == b
+      {a, b} when is_list(a) and is_list(b) -> a == b
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:not_equals, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> a != b
+      {a, b} when is_boolean(a) and is_boolean(b) -> a != b
+      {a, b} when is_binary(a) and is_binary(b) -> a != b
+      {a, b} when is_list(a) and is_list(b) -> a != b
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:less_than, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> a < b
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:greater_than, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> a > b
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:gt_or_equals, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> a >= b
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:lt_or_equals, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> a <= b
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:logical_and, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_boolean(a) and is_boolean(b) -> a && b
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:logical_or, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_boolean(a) and is_boolean(b) -> a || b
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:logical_not, a}) do
+    val_a = calculate_runtime_expr(ctx, a)
+
+    case val_a do
+      a when is_boolean(a)  -> !a
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:bitwise_left, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> Bitwise.<<<(a, b)
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:bitwise_right, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> Bitwise.>>>(a, b)
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:bitwise_and, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> Bitwise.band(a, b)
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:bitwise_or, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> Bitwise.bor(a, b)
+    end
+  end
+
+  defp calculate_runtime_expr(ctx, {:bitwise_xor, a, b}) do
+    val_a = calculate_runtime_expr(ctx, a)
+    val_b = calculate_runtime_expr(ctx, b)
+
+    case {val_a, val_b} do
+      {a, b} when is_number(a) and is_number(b) -> Bitwise.bxor(a, b)
+    end
   end
 end

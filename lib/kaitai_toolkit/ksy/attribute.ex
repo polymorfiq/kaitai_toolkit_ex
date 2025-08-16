@@ -70,6 +70,7 @@ defmodule KaitaiToolkit.Ksy.Attribute do
       type: type(data["type"]),
       repeat: repeat(data["repeat"]),
       repeat_expr: repeat_expr(data["repeat-expr"]),
+      repeat_until: repeat_until(data["repeat-until"]),
       if: if(data["if"]),
       size: size(data["size"]),
       size_eos: size_eos(data["size-eos"]),
@@ -98,16 +99,27 @@ defmodule KaitaiToolkit.Ksy.Attribute do
     parsed_type = TypeSystem.type(parsed)
 
     case parsed_type do
-      {:ok, :integer} -> :ok
-      {:ok, {:runtime_value, _}} -> :ok
-      {:ok, other} -> raise "Unexpected repeat-expr type: #{inspect(other)} in '#{inspect(expr_str)}'"
-      {:error, err} -> raise "Error calculating repeat-expr type: #{inspect(err)} in '#{inspect(expr_str)}'"
+      {:ok, :integer} ->
+        :ok
+
+      {:ok, {:runtime_value, _}} ->
+        :ok
+
+      {:ok, other} ->
+        raise "Unexpected repeat-expr type: #{inspect(other)} in '#{inspect(expr_str)}'"
+
+      {:error, err} ->
+        raise "Error calculating repeat-expr type: #{inspect(err)} in '#{inspect(expr_str)}'"
     end
 
-    expr_val = case parsed do
-      {:literal, val} -> val
-      _ -> {:expr, expr_str}
-    end
+    expr_val =
+      case parsed do
+        num when is_number(num) -> num
+        str when is_binary(str) -> str
+        b when is_boolean(b) -> b
+        list when is_list(list) -> list
+        _ -> {:expr, expr_str}
+      end
 
     Map.put(attr, :repeat_expr, expr_val)
   end
@@ -117,13 +129,20 @@ defmodule KaitaiToolkit.Ksy.Attribute do
     parsed_type = TypeSystem.type(parsed)
 
     case parsed_type do
-      {:ok, :boolean} -> :ok
-      {:ok, {:runtime_value, _}} -> :ok
-      {:ok, other} -> raise "Unexpected repeat-until type: #{inspect(other)} in '#{inspect(expr_str)}'"
-      {:error, err} -> raise "Error calculating repeat-until type: #{inspect(err)} in '#{inspect(expr_str)}'"
+      {:ok, :boolean} ->
+        :ok
+
+      {:ok, {:runtime_value, _}} ->
+        :ok
+
+      {:ok, other} ->
+        raise "Unexpected repeat-until type: #{inspect(other)} in '#{inspect(expr_str)}'"
+
+      {:error, err} ->
+        raise "Error calculating repeat-until type: #{inspect(err)} in '#{inspect(expr_str)}'"
     end
 
-    attr
+    Map.put(attr, :repeat_until, {:expr, expr_str})
   end
 
   defp maybe_parse_repeat(attr, _), do: attr
@@ -167,6 +186,9 @@ defmodule KaitaiToolkit.Ksy.Attribute do
   defp repeat_expr(nil), do: nil
   defp repeat_expr(num) when is_integer(num), do: num
   defp repeat_expr(str) when is_binary(str), do: {:expr, str}
+
+  defp repeat_until(nil), do: nil
+  defp repeat_until(str) when is_binary(str), do: {:expr, str}
 
   defp if(nil), do: nil
   defp if(condition) when is_binary(condition), do: condition
