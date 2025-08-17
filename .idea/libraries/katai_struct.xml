@@ -5,6 +5,8 @@
     <SOURCES>
       <root url="file://$PROJECT_DIR$/../katai_struct/lib" />
       <root url="file://$PROJECT_DIR$/../katai_struct/lib" />
+      <root url="file://$PROJECT_DIR$/../katai_struct/lib" />
+      <root url="file://$PROJECT_DIR$/../katai_struct/lib" />
     </SOURCES>
   </library>
 </component>

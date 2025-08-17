@@ -80,10 +80,13 @@ defmodule KaitaiToolkit.Generation do
       quote do
         def read_file!(path) do
           %{size: file_size} = File.stat!(path)
+          {:ok, kaitai} = GenServer.start_link(KaitaiStream, {[], 0})
 
-          File.open!(path, [:read, :binary, :raw, read_ahead: 1024], fn file ->
-            IO.binstream(file, 1) |> read_io_stream!(file_size)
-          end)
+          KaitaiStream.load_file_stream!(kaitai, path, file_size)
+          parsed = read!(kaitai)
+          KaitaiStream.close_file_stream!(kaitai)
+
+          parsed
         end
       end
 
