@@ -178,8 +178,9 @@ defmodule KaitaiToolkit.Ksy.Attribute do
   defp contents(nil), do: nil
   defp contents(num) when is_integer(num), do: <<num>>
   defp contents(str) when is_binary(str), do: {:string, str}
+
   defp contents(contents) when is_list(contents) do
-    all_nums = contents |> Enum.filter(& is_integer(&1))
+    all_nums = contents |> Enum.filter(&is_integer(&1))
 
     if Enum.count(all_nums) == Enum.count(contents) do
       :binary.list_to_bin(contents)

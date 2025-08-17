@@ -4,17 +4,17 @@ defmodule KaitaiToolkitTest.Formats.ValidationTest do
   test "will accept valid contents" do
     defmodule ContentsValidationChecker do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_bytes
-            seq:
-              - id: a_thing
-                size: 1
-              - id: checked_contents
-                contents: [0xC1, 0x83, 0x2A, 0x9E]
-              - id: b_thing
-                size: 1
-          """
+        contents: """
+          meta:
+            id: list_of_bytes
+          seq:
+            - id: a_thing
+              size: 1
+            - id: checked_contents
+              contents: [0xC1, 0x83, 0x2A, 0x9E]
+            - id: b_thing
+              size: 1
+        """
     end
 
     io =
@@ -29,29 +29,31 @@ defmodule KaitaiToolkitTest.Formats.ValidationTest do
 
     packet = ContentsValidationChecker.read!(io)
     assert <<0x1::integer-8>> = packet.a_thing
+
     assert <<
              0xC1::integer-8,
              0x83::integer-8,
              0x2A::integer-8,
              0x9E::integer-8
            >> = packet.checked_contents
+
     assert <<0x2::integer-8>> = packet.b_thing
   end
 
   test "will raise on invalid contents" do
     defmodule ContentsRejection do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_bytes
-            seq:
-              - id: a_thing
-                size: 1
-              - id: checked_contents
-                contents: [0xC1, 0x83, 0x2A, 0x9E]
-              - id: b_thing
-                size: 1
-          """
+        contents: """
+          meta:
+            id: list_of_bytes
+          seq:
+            - id: a_thing
+              size: 1
+            - id: checked_contents
+              contents: [0xC1, 0x83, 0x2A, 0x9E]
+            - id: b_thing
+              size: 1
+        """
     end
 
     io =
@@ -72,17 +74,17 @@ defmodule KaitaiToolkitTest.Formats.ValidationTest do
   test "allows string-based contents checks" do
     defmodule AsciiCheck do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_bytes
-            seq:
-              - id: a_thing
-                size: 1
-              - id: checked_contents
-                contents: abc
-              - id: b_thing
-                size: 1
-          """
+        contents: """
+          meta:
+            id: list_of_bytes
+          seq:
+            - id: a_thing
+              size: 1
+            - id: checked_contents
+              contents: abc
+            - id: b_thing
+              size: 1
+        """
     end
 
     io =
@@ -97,13 +99,13 @@ defmodule KaitaiToolkitTest.Formats.ValidationTest do
   test "allows array of items for contents" do
     defmodule ArrayContentsCheck do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_bytes
-            seq:
-              - id: checked_contents
-                contents: [1, abc, 2, d]
-          """
+        contents: """
+          meta:
+            id: list_of_bytes
+          seq:
+            - id: checked_contents
+              contents: [1, abc, 2, d]
+        """
     end
 
     io =

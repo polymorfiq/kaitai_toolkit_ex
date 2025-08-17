@@ -68,13 +68,42 @@ defmodule KaitaiToolkit.Generation do
   end
 
   defp gen_read_functions(mod, opts) do
+    base_map = quote do: %__MODULE__{}
+    base_with_instances = gen_instance_steps(mod, base_map, mod.instances, opts)
+
+    read_file_spec =
+      quote do
+        @spec read_file!(path :: String.t()) :: t()
+      end
+
+    read_file_def =
+      quote do
+        def read_file!(path) do
+          %{size: file_size} = File.stat!(path)
+
+          File.open!(path, [:read], fn file ->
+            IO.binstream(file, 1) |> read_io_stream!(file_size)
+          end)
+        end
+      end
+
+    read_stream_spec =
+      quote do
+        @spec read_io_stream!(stream :: Enumerable.t(), size :: non_neg_integer()) :: t()
+      end
+
+    read_stream_def =
+      quote do
+        def read_io_stream!(io_stream, size) do
+          {:ok, kaitai} = GenServer.start_link(KaitaiStream, {io_stream, size})
+          read!(kaitai)
+        end
+      end
+
     read_spec =
       quote do
         @spec read!(io :: KaitaiStream.t(), read_opts :: map()) :: t()
       end
-
-    base_map = quote do: %__MODULE__{}
-    base_with_instances = gen_instance_steps(mod, base_map, mod.instances, opts)
 
     read_def =
       quote do
@@ -121,7 +150,8 @@ defmodule KaitaiToolkit.Generation do
         [fn_def]
       end)
 
-    [read_spec, read_def] ++ attr_functions ++ instance_functions
+    [read_file_spec, read_file_def, read_stream_spec, read_stream_def, read_spec, read_def] ++
+      attr_functions ++ instance_functions
   end
 
   defp gen_attrib_read_fn(%{if: {:expr, expr_str}} = attr, attrib_ctx) do
@@ -187,22 +217,27 @@ defmodule KaitaiToolkit.Generation do
     end
   end
 
-  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{contents: contents}}, _) when is_list(contents) do
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{contents: contents}}, _)
+       when is_list(contents) do
     quote do
-      expected = unquote(Enum.reduce(contents, <<>>, fn
-          bytes, acc when is_binary(bytes) ->
-            acc <> <<bytes::binary>>
+      expected =
+        unquote(
+          Enum.reduce(contents, <<>>, fn
+            bytes, acc when is_binary(bytes) ->
+              acc <> <<bytes::binary>>
 
-          {:string, content_str}, acc ->
-            acc <> <<content_str::binary>>
-      end))
+            {:string, content_str}, acc ->
+              acc <> <<content_str::binary>>
+          end)
+        )
 
       KaitaiStruct.Stream.ensure_fixed_contents!(io, expected)
       expected
     end
   end
 
-  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{contents: contents}}, _) when is_binary(contents) do
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{contents: contents}}, _)
+       when is_binary(contents) do
     quote do
       expected = unquote(contents)
 
