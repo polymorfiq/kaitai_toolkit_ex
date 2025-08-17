@@ -30,20 +30,30 @@ defmodule KaitaiToolkit.Struct do
   end
 
   defp calculate_runtime_expr(%{io: io}, {:meta, :io}), do: io
-  defp calculate_runtime_expr(%{self: self}, {:meta, :self}) when is_list(self), do: List.first(self)
+
+  defp calculate_runtime_expr(%{self: self}, {:meta, :self}) when is_list(self),
+    do: List.first(self)
+
   defp calculate_runtime_expr(%{parents: [parent | _]}, {:meta, :parent}), do: parent
-  defp calculate_runtime_expr(%{parents: [_ | _] = parents}, {:meta, :root}), do: List.last(parents)
+
+  defp calculate_runtime_expr(%{parents: [_ | _] = parents}, {:meta, :root}),
+    do: List.last(parents)
+
   defp calculate_runtime_expr(_ctx, val) when is_number(val), do: val
   defp calculate_runtime_expr(_ctx, val) when is_binary(val), do: val
   defp calculate_runtime_expr(_ctx, val) when is_boolean(val), do: val
   defp calculate_runtime_expr(_ctx, val) when is_binary(val), do: val
-  defp calculate_runtime_expr(ctx, vals) when is_list(vals), do: Enum.map(vals, &calculate_runtime_expr(ctx, &1))
+
+  defp calculate_runtime_expr(ctx, vals) when is_list(vals),
+    do: Enum.map(vals, &calculate_runtime_expr(ctx, &1))
+
   defp calculate_runtime_expr(_ctx, {:string, str}), do: {:string, str}
 
   defp calculate_runtime_expr(ctx, vals) when is_list(vals),
     do: Enum.map(vals, &calculate_runtime_expr(ctx, &1))
 
-  defp calculate_runtime_expr(ctx, {:name, name}), do: calculate_property_call(ctx, ctx.self, name)
+  defp calculate_runtime_expr(ctx, {:name, name}),
+    do: calculate_property_call(ctx, ctx.self, name)
 
   defp calculate_runtime_expr(ctx, {:property, val, {:name, prop}}) do
     calculated_val_expr = calculate_runtime_expr(ctx, val)
@@ -247,24 +257,54 @@ defmodule KaitaiToolkit.Struct do
     end
   end
 
-  defp calculate_property_call(ctx, int, "to_s") when is_integer(int), do: calculate_method_call(ctx, int, "to_s", [])
-  defp calculate_property_call(ctx, float, "to_i") when is_float(float), do: calculate_method_call(ctx, float, "to_i", [])
-  defp calculate_property_call(ctx, bool, "to_i") when is_boolean(bool), do: calculate_method_call(ctx, bool, "to_i", [])
-  defp calculate_property_call(ctx, list, "length") when is_list(list), do: calculate_method_call(ctx, list, "length", [])
+  defp calculate_property_call(ctx, int, "to_s") when is_integer(int),
+    do: calculate_method_call(ctx, int, "to_s", [])
 
-  defp calculate_property_call(ctx, byte_array, "length") when is_binary(byte_array), do: calculate_method_call(ctx, byte_array, "length", [])
+  defp calculate_property_call(ctx, float, "to_i") when is_float(float),
+    do: calculate_method_call(ctx, float, "to_i", [])
 
-  defp calculate_property_call(ctx, {:string, str}, "length"), do: calculate_method_call(ctx, {:string, str}, "length", [])
-  defp calculate_property_call(ctx, {:string, str}, "reverse"), do: calculate_method_call(ctx, {:string, str}, "reverse", [])
-  defp calculate_property_call(ctx, {:string, str}, "to_i"), do: calculate_method_call(ctx, {:string, str}, "to_i", [])
-  defp calculate_property_call(ctx, list, "first") when is_list(list), do: calculate_method_call(ctx, list, "first", [])
-  defp calculate_property_call(ctx, list, "last") when is_list(list), do: calculate_method_call(ctx, list, "last", [])
-  defp calculate_property_call(ctx, list, "size") when is_list(list), do: calculate_method_call(ctx, list, "size", [])
-  defp calculate_property_call(ctx, list, "min") when is_list(list), do: calculate_method_call(ctx, list, "min", [])
-  defp calculate_property_call(ctx, list, "max") when is_list(list), do: calculate_method_call(ctx, list, "max", [])
-  defp calculate_property_call(ctx, stream, "eof") when is_pid(stream), do: calculate_method_call(ctx, stream, "eof", [])
-  defp calculate_property_call(ctx, stream, "size") when is_pid(stream), do: calculate_method_call(ctx, stream, "size", [])
-  defp calculate_property_call(ctx, stream, "pos") when is_pid(stream), do: calculate_method_call(ctx, stream, "pos", [])
+  defp calculate_property_call(ctx, bool, "to_i") when is_boolean(bool),
+    do: calculate_method_call(ctx, bool, "to_i", [])
+
+  defp calculate_property_call(ctx, list, "length") when is_list(list),
+    do: calculate_method_call(ctx, list, "length", [])
+
+  defp calculate_property_call(ctx, byte_array, "length") when is_binary(byte_array),
+    do: calculate_method_call(ctx, byte_array, "length", [])
+
+  defp calculate_property_call(ctx, {:string, str}, "length"),
+    do: calculate_method_call(ctx, {:string, str}, "length", [])
+
+  defp calculate_property_call(ctx, {:string, str}, "reverse"),
+    do: calculate_method_call(ctx, {:string, str}, "reverse", [])
+
+  defp calculate_property_call(ctx, {:string, str}, "to_i"),
+    do: calculate_method_call(ctx, {:string, str}, "to_i", [])
+
+  defp calculate_property_call(ctx, list, "first") when is_list(list),
+    do: calculate_method_call(ctx, list, "first", [])
+
+  defp calculate_property_call(ctx, list, "last") when is_list(list),
+    do: calculate_method_call(ctx, list, "last", [])
+
+  defp calculate_property_call(ctx, list, "size") when is_list(list),
+    do: calculate_method_call(ctx, list, "size", [])
+
+  defp calculate_property_call(ctx, list, "min") when is_list(list),
+    do: calculate_method_call(ctx, list, "min", [])
+
+  defp calculate_property_call(ctx, list, "max") when is_list(list),
+    do: calculate_method_call(ctx, list, "max", [])
+
+  defp calculate_property_call(ctx, stream, "eof") when is_pid(stream),
+    do: calculate_method_call(ctx, stream, "eof", [])
+
+  defp calculate_property_call(ctx, stream, "size") when is_pid(stream),
+    do: calculate_method_call(ctx, stream, "size", [])
+
+  defp calculate_property_call(ctx, stream, "pos") when is_pid(stream),
+    do: calculate_method_call(ctx, stream, "pos", [])
+
   defp calculate_property_call(ctx, data, key_name) when is_map(data) do
     key = String.to_existing_atom(key_name)
 

@@ -763,7 +763,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
     do: parse_object_properties([{:property, a, b} | rest], seen)
 
   defp parse_object_properties([a, :colon, :colon, b | rest], seen),
-       do: parse_object_properties([{:enum_val, a, b} | rest], seen)
+    do: parse_object_properties([{:enum_val, a, b} | rest], seen)
 
   defp parse_object_properties([{:property, obj, method_name}, {:parens, args} | rest], seen),
     do: parse_object_properties([{:method_call, obj, method_name, args} | rest], seen)
@@ -772,8 +772,7 @@ defmodule KaitaiToolkit.Ksy.Expression do
     do: parse_object_properties(rest, seen ++ [{:parens, parse_object_properties(exprs, [])}])
 
   defp parse_object_properties([{:brackets, exprs} | rest], seen),
-    do:
-      parse_object_properties(rest, seen ++ [{:brackets, parse_object_properties(exprs, [])}])
+    do: parse_object_properties(rest, seen ++ [{:brackets, parse_object_properties(exprs, [])}])
 
   defp parse_object_properties([word | rest], seen),
     do: parse_object_properties(rest, seen ++ [word])
@@ -817,25 +816,45 @@ defmodule KaitaiToolkit.Ksy.Expression do
   defp parse_bitwise(lexed, seen \\ [])
 
   defp parse_bitwise([a, :bit_shift_left, b | rest], seen),
-    do: parse_bitwise([{:bitwise_left, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest], seen)
+    do:
+      parse_bitwise(
+        [{:bitwise_left, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest],
+        seen
+      )
 
   defp parse_bitwise([a, :bit_shift_right, b | rest], seen),
-    do: parse_bitwise([{:bitwise_right, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest], seen)
+    do:
+      parse_bitwise(
+        [{:bitwise_right, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest],
+        seen
+      )
 
   defp parse_bitwise([a, :ampersand, b | rest], seen),
-    do: parse_bitwise([{:bitwise_and, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest], seen)
+    do:
+      parse_bitwise(
+        [{:bitwise_and, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest],
+        seen
+      )
 
   defp parse_bitwise([a, :pipe, b | rest], seen),
-    do: parse_bitwise([{:bitwise_or, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest], seen)
+    do:
+      parse_bitwise(
+        [{:bitwise_or, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest],
+        seen
+      )
 
   defp parse_bitwise([a, :caret, b | rest], seen),
-    do: parse_bitwise([{:bitwise_xor, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest], seen)
+    do:
+      parse_bitwise(
+        [{:bitwise_xor, List.first(parse_bitwise([a])), List.first(parse_bitwise([b]))} | rest],
+        seen
+      )
 
   defp parse_bitwise([{:parens, exprs} | rest], seen),
-       do: parse_bitwise(rest, seen ++ [{:parens, parse_bitwise(exprs)}])
+    do: parse_bitwise(rest, seen ++ [{:parens, parse_bitwise(exprs)}])
 
   defp parse_bitwise([{:brackets, exprs} | rest], seen),
-       do: parse_bitwise(rest, seen ++ [{:brackets, parse_bitwise(exprs)}])
+    do: parse_bitwise(rest, seen ++ [{:brackets, parse_bitwise(exprs)}])
 
   defp parse_bitwise([word | rest], seen),
     do: parse_bitwise(rest, seen ++ [word])

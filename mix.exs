@@ -4,7 +4,7 @@ defmodule KaitaiToolkit.MixProject do
   def project do
     [
       app: :kaitai_toolkit,
-      version: "0.0.10",
+      version: "0.0.11",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),

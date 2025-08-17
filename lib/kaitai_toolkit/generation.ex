@@ -83,27 +83,286 @@ defmodule KaitaiToolkit.Generation do
         end
       end
 
-    attr_functions = mod.attrs |> Enum.flat_map(fn attr ->
-      fn_def = quote do
-        defp unquote(:"read_#{attr.name}!")(io, ksy, read_opts) do
-          unquote(gen_read_step(attr, mod, quote(do: ksy), opts))
-        end
-      end
+    attr_functions =
+      mod.attrs
+      |> Enum.flat_map(fn attr ->
+        fn_def =
+          quote do
+            defp unquote(:"read_#{attr.name}!")(io, ksy, read_opts) do
+              ctx = %{io: io, self: ksy, parents: read_opts.parents}
 
-      [fn_def]
-    end)
+              get_val = fn ->
+                unquote(gen_attrib_read_fn(attr, %{root: opts[:root], ksy: opts[:ksy]}))
+              end
 
-    instance_functions = mod.instances |> Enum.flat_map(fn attr ->
-      fn_def = quote do
-        defp unquote(:"instance_#{attr.name}!")(io, ksy, read_opts) do
-          unquote(gen_instance_step(attr, mod, quote(do: ksy), opts))
-        end
-      end
+              Map.put(ksy, unquote(attr.name), get_val.())
+            end
+          end
 
-      [fn_def]
-    end)
+        [fn_def]
+      end)
+
+    instance_functions =
+      mod.instances
+      |> Enum.flat_map(fn attr ->
+        fn_def =
+          quote do
+            defp unquote(:"instance_#{attr.name}!")(io, ksy, read_opts) do
+              ctx = %{io: io, self: ksy, parents: read_opts.parents}
+
+              get_val = fn ->
+                unquote(gen_attrib_read_fn(attr, %{root: opts[:root], ksy: opts[:ksy]}))
+              end
+
+              Map.put(ksy, unquote(attr.name), get_val.())
+            end
+          end
+
+        [fn_def]
+      end)
 
     [read_spec, read_def] ++ attr_functions ++ instance_functions
+  end
+
+  defp gen_attrib_read_fn(%{if: {:expr, expr_str}} = attr, attrib_ctx) do
+    quote do
+      if KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str})) do
+        unquote(gen_attrib_read_fn(%{attr | if: nil}, attrib_ctx))
+      else
+        nil
+      end
+    end
+  end
+
+  defp gen_attrib_read_fn(%{repeat: :repeat_eos} = attr, attrib_ctx) do
+    quote do
+      KaitaiStruct.Stream.repeat(io, :eos, fn io, _ ->
+        unquote(gen_attrib_read_fn(%{attr | repeat: nil}, attrib_ctx))
+      end)
+    end
+  end
+
+  defp gen_attrib_read_fn(%{repeat: {:repeat_const, num_repeats}} = attr, attrib_ctx) do
+    quote do
+      Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(unquote(num_repeats)), fn _idx ->
+        unquote(gen_attrib_read_fn(%{attr | repeat: nil}, attrib_ctx))
+      end)
+    end
+  end
+
+  defp gen_attrib_read_fn(%{repeat: {:repeat_expr, repeat_expr}} = attr, attrib_ctx) do
+    quote do
+      repeat_val = KaitaiToolkit.Struct.parse_expr!(ctx, unquote(repeat_expr))
+
+      Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(repeat_val), fn _idx ->
+        unquote(gen_attrib_read_fn(%{attr | repeat: nil}, attrib_ctx))
+      end)
+    end
+  end
+
+  defp gen_attrib_read_fn(
+         %{data_type: data_type, repeat: {:repeat_until, until_expr}} = attr,
+         attrib_ctx
+       ) do
+    quote do
+      Stream.repeatedly(fn -> 1 end)
+      |> Enum.reduce_while([], fn _, acc ->
+        ctx = %{ctx | io: io, self: acc, parents: [ksy | read_opts.parents]}
+
+        until_state =
+          if Enum.count(acc) > 0,
+            do: KaitaiToolkit.Struct.parse_expr!(ctx, unquote(until_expr))
+
+        if until_state,
+          do: {:halt, Enum.reverse(acc)},
+          else:
+            {:cont,
+             [
+               unquote(
+                 gen_attrib_read_fn(%{attr | data_type: data_type, repeat: nil}, attrib_ctx)
+               )
+               | acc
+             ]}
+      end)
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{size_eos: true}}, _) do
+    quote do
+      size = trunc(KaitaiStruct.Stream.size(io) - KaitaiStruct.Stream.pos(io))
+      KaitaiStruct.Stream.read_bytes_array!(io, size)
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{size: size}}, _) when is_number(size) do
+    quote do
+      KaitaiStruct.Stream.read_bytes_array!(io, unquote(size))
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{size: {:expr, expr_str}}}, _) do
+    quote do
+      size = KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
+      KaitaiStruct.Stream.read_bytes_array!(io, size)
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :io}, _),
+    do: quote(do: io)
+
+  defp gen_attrib_read_fn(%{data_type: :str} = attr, _) do
+    quote do
+      size = KaitaiToolkit.Struct.parse_expr!(ctx, unquote(attr.attr.size))
+      KaitaiStruct.Stream.read_bytes_array!(io, size)
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :strz} = attr, _) do
+    quote do
+      KaitaiStruct.Stream.read_bytes_term!(
+        io,
+        unquote(attr.attr.encoding || "UTF-8"),
+        unquote(0),
+        unquote(attr.attr.include),
+        unquote(attr.attr.consume),
+        unquote(attr.attr.eos_error)
+      )
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: %{switch_on: switch_on, cases: cases}} = attr, attrib_ctx) do
+    quote do
+      switch_val = KaitaiToolkit.Struct.parse_expr!(ctx, {:expr, unquote(switch_on)})
+
+      val_to_type =
+        unquote(
+          {:%{}, [],
+           Enum.map(cases, fn {key, val} ->
+             switch_key =
+               cond do
+                 is_number(key) ->
+                   key
+
+                 is_binary(key) ->
+                   [enum_name, enum_val_id] = String.split(key, "::")
+
+                   {_, curr_enum} =
+                     Enum.find(attrib_ctx.ksy.enums, fn {id, _} -> id == enum_name end)
+
+                   curr_vals_by_id = Map.new(curr_enum, fn {val, spec} -> {spec.id, val} end)
+                   raw_enum_case = Map.fetch!(curr_vals_by_id, enum_val_id)
+
+                   raw_enum_case
+               end
+
+             {switch_key,
+              quote(
+                do: fn -> unquote(gen_attrib_read_fn(%{attr | data_type: val}, attrib_ctx)) end
+              )}
+           end)}
+        )
+
+      Map.fetch!(val_to_type, switch_val).()
+    end
+  end
+
+  defp gen_attrib_read_fn(%{instance: true, value: {:expr, expr_str}}, _) do
+    quote do
+      {:value_instance,
+       fn ctx ->
+         KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
+       end}
+    end
+  end
+
+  defp gen_attrib_read_fn(%{instance: true, pos: {:expr, expr_str}} = attr, attrib_ctx) do
+    quote do
+      {:instance,
+       fn ctx ->
+         pos = KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
+         orig_pos = KaitaiStruct.Stream.pos(io)
+         :ok = KaitaiStruct.Stream.seek(io, pos)
+
+         val = unquote(gen_attrib_read_fn(%{attr | pos: nil}, attrib_ctx))
+         :ok = KaitaiStruct.Stream.seek(io, orig_pos)
+
+         val
+       end}
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :u1}, _), do: quote(do: KaitaiStruct.Stream.read_u1!(io))
+  defp gen_attrib_read_fn(%{data_type: :u2}, _), do: quote(do: KaitaiStruct.Stream.read_u2be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :u2le}, _),
+    do: quote(do: KaitaiStruct.Stream.read_u2le!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :u2be}, _),
+    do: quote(do: KaitaiStruct.Stream.read_u2be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :u4}, _), do: quote(do: KaitaiStruct.Stream.read_u4be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :u4le}, _),
+    do: quote(do: KaitaiStruct.Stream.read_u4le!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :u4be}, _),
+    do: quote(do: KaitaiStruct.Stream.read_u4be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :u8}, _), do: quote(do: KaitaiStruct.Stream.read_u8be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :u8le}, _),
+    do: quote(do: KaitaiStruct.Stream.read_u8le!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :u8be}, _),
+    do: quote(do: KaitaiStruct.Stream.read_u8be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s1}, _), do: quote(do: KaitaiStruct.Stream.read_s1!(io))
+  defp gen_attrib_read_fn(%{data_type: :s2}, _), do: quote(do: KaitaiStruct.Stream.read_s2be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s2le}, _),
+    do: quote(do: KaitaiStruct.Stream.read_s2le!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s2be}, _),
+    do: quote(do: KaitaiStruct.Stream.read_s2be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s4}, _), do: quote(do: KaitaiStruct.Stream.read_s4be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s4le}, _),
+    do: quote(do: KaitaiStruct.Stream.read_s4le!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s4be}, _),
+    do: quote(do: KaitaiStruct.Stream.read_s4be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s8}, _), do: quote(do: KaitaiStruct.Stream.read_s8be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s8le}, _),
+    do: quote(do: KaitaiStruct.Stream.read_s8le!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :s8be}, _),
+    do: quote(do: KaitaiStruct.Stream.read_s8be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :f4}, _), do: quote(do: KaitaiStruct.Stream.read_f4be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :f4le}, _),
+    do: quote(do: KaitaiStruct.Stream.read_f4le!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :f4be}, _),
+    do: quote(do: KaitaiStruct.Stream.read_f4be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :f8}, _), do: quote(do: KaitaiStruct.Stream.read_f8be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :f8le}, _),
+    do: quote(do: KaitaiStruct.Stream.read_f8le!(io))
+
+  defp gen_attrib_read_fn(%{data_type: :f8be}, _),
+    do: quote(do: KaitaiStruct.Stream.read_f8be!(io))
+
+  defp gen_attrib_read_fn(%{data_type: {:user_defined, name}}, attrib_ctx) do
+    custom_mod_name = :"#{Module.concat(attrib_ctx.root, Macro.camelize(name))}"
+
+    quote do
+      unquote(custom_mod_name).read!(io, %{read_opts | parents: [ksy | read_opts.parents]})
+    end
   end
 
   defp gen_instance_steps(_mod, left, [], _opts) do
@@ -113,37 +372,13 @@ defmodule KaitaiToolkit.Generation do
   end
 
   defp gen_instance_steps(mod, left, [attr | rest_attrs], opts) do
-    with_step = quote do
-      unquote(left)
-      |> then(fn ksy -> unquote(:"instance_#{attr.name}!")(io, ksy, read_opts) end)
-    end
+    with_step =
+      quote do
+        unquote(left)
+        |> then(fn ksy -> unquote(:"instance_#{attr.name}!")(io, ksy, read_opts) end)
+      end
 
     gen_instance_steps(mod, with_step, rest_attrs, opts)
-  end
-
-  defp gen_instance_step(%{value: {:expr, expr_str}} = attr, _mod, left, _opts) do
-    quote do
-      unquote(left)
-      |> Map.put(unquote(attr.name), {:value_instance, fn ctx ->
-        KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
-      end})
-    end
-  end
-
-  defp gen_instance_step(%{pos: {:expr, expr_str}} = attr, mod, left, opts) do
-    quote do
-      unquote(left)
-      |> Map.put(unquote(attr.name), {:instance, fn ctx ->
-        pos = KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
-        orig_pos = KaitaiStruct.Stream.pos(io)
-        :ok = KaitaiStruct.Stream.seek(io, pos)
-
-        val = unquote(gen_read_step(attr, mod, quote(do: ctx.self), opts))
-        :ok = KaitaiStruct.Stream.seek(io, orig_pos)
-
-        val
-      end})
-    end
   end
 
   defp gen_read_steps(_mod, left, [], _opts) do
@@ -153,252 +388,13 @@ defmodule KaitaiToolkit.Generation do
   end
 
   defp gen_read_steps(mod, left, [attr | rest_attrs], opts) do
-    with_step = quote do
-      unquote(left)
-      |> then(fn ksy -> unquote(:"read_#{attr.name}!")(io, ksy, read_opts) end)
-    end
+    with_step =
+      quote do
+        unquote(left)
+        |> then(fn ksy -> unquote(:"read_#{attr.name}!")(io, ksy, read_opts) end)
+      end
 
     gen_read_steps(mod, with_step, rest_attrs, opts)
-  end
-
-  defp gen_read_step(%{if: {:expr, expr_str}} = attr, mod, left, opts) do
-    quote do
-      unquote(left)
-      |> then(fn ksy ->
-        ctx = %{io: io, self: ksy, parents: read_opts.parents}
-
-        if KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str})) do
-          unquote(gen_read_step(%{attr | if: nil}, mod, quote(do: ksy), opts))
-        else
-          ksy
-        end
-      end)
-    end
-  end
-
-  defp gen_read_step(%{data_type: data_type, repeat: :repeat_eos} = attr, _mod, left, opts) do
-    quote do
-      unquote(left)
-      |> then(fn ksy ->
-        Map.put(
-          ksy,
-          unquote(attr.name),
-          KaitaiStruct.Stream.repeat(io, :eos, fn io, _ ->
-            unquote(gen_read_fn(data_type, opts))
-          end)
-        )
-      end)
-    end
-  end
-
-  defp gen_read_step(
-         %{data_type: data_type, repeat: {:repeat_const, num_repeats}} = attr,
-         _mod,
-         left,
-         opts
-       ) do
-    quote do
-      unquote(left)
-      |> then(fn ksy ->
-        Map.put(
-          ksy,
-          unquote(attr.name),
-          Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(unquote(num_repeats)), fn _idx ->
-            unquote(gen_read_fn(data_type, opts))
-          end)
-        )
-      end)
-    end
-  end
-
-  defp gen_read_step(
-         %{data_type: data_type, repeat: {:repeat_expr, repeat_expr}} = attr,
-         _mod,
-         left,
-         opts
-       ) do
-    quote do
-      unquote(left)
-      |> then(fn ksy ->
-        ctx = %{io: io, self: ksy, parents: read_opts.parents}
-        repeat_val = KaitaiToolkit.Struct.parse_expr!(ctx, unquote(repeat_expr))
-
-        case repeat_val do
-          repeat_count when is_integer(repeat_count) ->
-            val =
-              Enum.map(Stream.repeatedly(fn -> 1 end) |> Enum.take(repeat_count), fn _idx ->
-                unquote(gen_read_fn(data_type, opts))
-              end)
-
-            Map.put(ksy, unquote(attr.name), val)
-        end
-      end)
-    end
-  end
-
-  defp gen_read_step(
-         %{data_type: data_type, repeat: {:repeat_until, until_expr}} = attr,
-         _mod,
-         left,
-         opts
-       ) do
-    quote do
-      unquote(left)
-      |> then(fn ksy ->
-        val =
-          Stream.repeatedly(fn -> 1 end)
-          |> Enum.reduce_while([], fn _, acc ->
-            ctx = %{io: io, self: acc, parents: [ksy | read_opts.parents]}
-            until_state =
-              if Enum.count(acc) > 0,
-                 do: KaitaiToolkit.Struct.parse_expr!(ctx, unquote(until_expr))
-
-            if until_state,
-              do: {:halt, Enum.reverse(acc)},
-              else: {:cont, [unquote(gen_read_fn(data_type, opts)) | acc]}
-          end)
-
-        Map.put(ksy, unquote(attr.name), val)
-      end)
-    end
-  end
-
-  defp gen_read_step(%{data_type: :bytes, attr: %{size_eos: true}} = attr, _mod, left, _opts) do
-    quote do
-      unquote(left)
-      |> then(fn ksy ->
-        ctx = %{io: io, self: ksy, parents: read_opts.parents}
-        size = trunc(KaitaiStruct.Stream.size(io) - KaitaiStruct.Stream.pos(io))
-
-        Map.put(
-          ksy,
-          unquote(attr.name),
-          KaitaiStruct.Stream.read_bytes_array!(io, size)
-        )
-      end)
-    end
-  end
-
-  defp gen_read_step(%{data_type: :bytes} = attr, _mod, left, _opts) do
-    quote do
-      unquote(left)
-      |> then(fn ksy ->
-        ctx = %{io: io, self: ksy, parents: read_opts.parents}
-        size = unquote(if is_number(attr.attr.size), do: attr.attr.size, else: quote(do: KaitaiToolkit.Struct.parse_expr!(ctx, unquote(attr.attr.size))))
-
-        Map.put(
-          ksy,
-          unquote(attr.name),
-          KaitaiStruct.Stream.read_bytes_array!(io, size)
-        )
-      end)
-    end
-  end
-
-  defp gen_read_step(%{data_type: :io} = attr, _mod, left, _opts),
-    do: quote(do: unquote(left) |> Map.put(unquote(attr.name), io))
-
-  defp gen_read_step(%{data_type: :str} = attr, _mod, left, _opts) do
-    quote do
-      unquote(left)
-      |> then(fn ksy ->
-        ctx = %{io: io, self: ksy, parents: read_opts.parents}
-        size = KaitaiToolkit.Struct.parse_expr!(ctx, unquote(attr.attr.size))
-
-        Map.put(
-          ksy,
-          unquote(attr.name),
-          KaitaiStruct.Stream.read_bytes_array!(io, size)
-        )
-      end)
-    end
-  end
-
-  defp gen_read_step(%{data_type: :strz} = attr, _mod, left, _opts) do
-    quote do
-      unquote(left)
-      |> Map.put(
-        unquote(attr.name),
-        KaitaiStruct.Stream.read_bytes_term!(
-          io,
-          unquote(attr.attr.encoding || "UTF-8"),
-          unquote(0),
-          unquote(attr.attr.include),
-          unquote(attr.attr.consume),
-          unquote(attr.attr.eos_error)
-        )
-      )
-    end
-  end
-
-  defp gen_read_step(%{data_type: %{switch_on: switch_on, cases: cases}} = attr, _mod, left, opts) do
-    ksy = Keyword.fetch!(opts, :ksy)
-
-    quote do
-      unquote(left) |> then(fn ksy ->
-        ctx = %{io: io, self: ksy, parents: read_opts.parents}
-        switch_val = KaitaiToolkit.Struct.parse_expr!(ctx, {:expr, unquote(switch_on)})
-
-        val_to_type = unquote({:%{}, [], Enum.map(cases, fn {key, val} ->
-          switch_key = cond do
-            is_number(key) -> key
-            is_binary(key) ->
-              [enum_name, enum_val_id] = String.split(key, "::")
-              {_, curr_enum} = Enum.find(ksy.enums, fn {id, _} -> id == enum_name end)
-              curr_vals_by_id = Map.new(curr_enum, fn {val, spec} -> {spec.id, val} end)
-              raw_enum_case = Map.fetch!(curr_vals_by_id, enum_val_id)
-
-              raw_enum_case
-          end
-
-          {switch_key, quote(do: fn -> unquote(gen_read_fn(val, opts)) end)}
-        end)})
-
-        Map.put(ksy, unquote(attr.name), Map.fetch!(val_to_type, switch_val).())
-      end)
-    end
-  end
-
-  defp gen_read_step(%{data_type: data_type} = attr, _mod, left, opts) do
-    quote do
-      unquote(left)
-      |> then(fn ksy -> Map.put(ksy, unquote(attr.name), unquote(gen_read_fn(data_type, opts))) end)
-    end
-  end
-
-  defp gen_read_fn(:u1, _), do: quote(do: KaitaiStruct.Stream.read_u1!(io))
-  defp gen_read_fn(:u2, _), do: quote(do: KaitaiStruct.Stream.read_u2be!(io))
-  defp gen_read_fn(:u2le, _), do: quote(do: KaitaiStruct.Stream.read_u2le!(io))
-  defp gen_read_fn(:u2be, _), do: quote(do: KaitaiStruct.Stream.read_u2be!(io))
-  defp gen_read_fn(:u4, _), do: quote(do: KaitaiStruct.Stream.read_u4be!(io))
-  defp gen_read_fn(:u4le, _), do: quote(do: KaitaiStruct.Stream.read_u4le!(io))
-  defp gen_read_fn(:u4be, _), do: quote(do: KaitaiStruct.Stream.read_u4be!(io))
-  defp gen_read_fn(:u8, _), do: quote(do: KaitaiStruct.Stream.read_u8be!(io))
-  defp gen_read_fn(:u8le, _), do: quote(do: KaitaiStruct.Stream.read_u8le!(io))
-  defp gen_read_fn(:u8be, _), do: quote(do: KaitaiStruct.Stream.read_u8be!(io))
-  defp gen_read_fn(:s1, _), do: quote(do: KaitaiStruct.Stream.read_s1!(io))
-  defp gen_read_fn(:s2, _), do: quote(do: KaitaiStruct.Stream.read_s2be!(io))
-  defp gen_read_fn(:s2le, _), do: quote(do: KaitaiStruct.Stream.read_s2le!(io))
-  defp gen_read_fn(:s2be, _), do: quote(do: KaitaiStruct.Stream.read_s2be!(io))
-  defp gen_read_fn(:s4, _), do: quote(do: KaitaiStruct.Stream.read_s4be!(io))
-  defp gen_read_fn(:s4le, _), do: quote(do: KaitaiStruct.Stream.read_s4le!(io))
-  defp gen_read_fn(:s4be, _), do: quote(do: KaitaiStruct.Stream.read_s4be!(io))
-  defp gen_read_fn(:s8, _), do: quote(do: KaitaiStruct.Stream.read_s8be!(io))
-  defp gen_read_fn(:s8le, _), do: quote(do: KaitaiStruct.Stream.read_s8le!(io))
-  defp gen_read_fn(:s8be, _), do: quote(do: KaitaiStruct.Stream.read_s8be!(io))
-  defp gen_read_fn(:f4, _), do: quote(do: KaitaiStruct.Stream.read_f4be!(io))
-  defp gen_read_fn(:f4le, _), do: quote(do: KaitaiStruct.Stream.read_f4le!(io))
-  defp gen_read_fn(:f4be, _), do: quote(do: KaitaiStruct.Stream.read_f4be!(io))
-  defp gen_read_fn(:f8, _), do: quote(do: KaitaiStruct.Stream.read_f8be!(io))
-  defp gen_read_fn(:f8le, _), do: quote(do: KaitaiStruct.Stream.read_f8le!(io))
-  defp gen_read_fn(:f8be, _), do: quote(do: KaitaiStruct.Stream.read_f8be!(io))
-
-  defp gen_read_fn({:user_defined, name}, opts) do
-    custom_mod_name = :"#{Module.concat(opts[:root], Macro.camelize(name))}"
-
-    quote do
-      unquote(custom_mod_name).read!(io, %{read_opts | parents: [ksy | read_opts.parents]})
-    end
   end
 
   defp extract_modules(ksy, opts) do
@@ -483,19 +479,20 @@ defmodule KaitaiToolkit.Generation do
 
         attr_type =
           if repeat,
-             do: [data_type_to_elixir(attr.type, type_root)],
-             else: data_type_to_elixir(attr.type, type_root)
+            do: [data_type_to_elixir(attr.type, type_root)],
+            else: data_type_to_elixir(attr.type, type_root)
 
-         %Attribute{
-           name: inst_id,
-           elixir_type: attr_type,
-           data_type: attr.type,
-           if: attr.if,
-           pos: attr.pos,
-           value: attr.value,
-           repeat: repeat,
-           attr: attr
-         }
+        %Attribute{
+          name: inst_id,
+          instance: true,
+          elixir_type: attr_type,
+          data_type: attr.type,
+          if: attr.if,
+          pos: attr.pos,
+          value: attr.value,
+          repeat: repeat,
+          attr: attr
+        }
       end)
 
     %KaitaiModule{name: mod_name, attrs: attrs, instances: instances, deps: deps}

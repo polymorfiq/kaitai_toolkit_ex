@@ -176,6 +176,7 @@ defmodule KaitaiToolkit.Ksy.Attribute do
   defp doc_ref(doc_refs) when is_list(doc_refs), do: doc_refs
 
   defp contents(nil), do: <<>>
+  defp contents(contents) when is_list(contents), do: :binary.list_to_bin(contents)
   defp contents(contents) when is_binary(contents), do: contents
 
   defp repeat(nil), do: nil

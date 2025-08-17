@@ -77,7 +77,7 @@ defmodule KaitaiToolkitTest.Formats.DnsPacketTest do
         # Label
         "org"::binary,
         # No more labels
-        0::unsigned-integer-8,
+        0::unsigned-integer-8
       >>)
 
     packet = CnameDnsPacket.read!(io)

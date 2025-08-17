@@ -213,23 +213,23 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
   test "can handle a parent call" do
     defmodule RuntimeParentExpression do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_things
-              title: A bunch of things
-            seq:
-              - id: num_things
-                type: s2
-              - id: thing
-                type: a_thing
-            types:
-              a_thing:
-                seq:
-                  - id: things
-                    type: s2
-                    repeat: expr
-                    repeat-expr: _parent.num_things
-          """
+        contents: """
+          meta:
+            id: list_of_things
+            title: A bunch of things
+          seq:
+            - id: num_things
+              type: s2
+            - id: thing
+              type: a_thing
+          types:
+            a_thing:
+              seq:
+                - id: things
+                  type: s2
+                  repeat: expr
+                  repeat-expr: _parent.num_things
+        """
     end
 
     io =
@@ -248,37 +248,37 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
   test "can handle a nested parent call" do
     defmodule RuntimeNestedParentExpression do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_things
-              title: A bunch of things
-            seq:
-              - id: num_things
-                type: s2
-              - id: num_double_things
-                type: s2
-              - id: thing
-                type: a_thing
-            types:
-              a_thing:
-                seq:
-                  - id: single_things
-                    type: s2
-                    repeat: expr
-                    repeat-expr: _parent.num_things
-                  - id: double
-                    type: double_nested
-              double_nested:
-                seq:
-                  - id: single_double_things
-                    type: s2
-                    repeat: expr
-                    repeat-expr: _parent.single_things.length
-                  - id: double_things
-                    type: s2
-                    repeat: expr
-                    repeat-expr: _root.num_double_things
-          """
+        contents: """
+          meta:
+            id: list_of_things
+            title: A bunch of things
+          seq:
+            - id: num_things
+              type: s2
+            - id: num_double_things
+              type: s2
+            - id: thing
+              type: a_thing
+          types:
+            a_thing:
+              seq:
+                - id: single_things
+                  type: s2
+                  repeat: expr
+                  repeat-expr: _parent.num_things
+                - id: double
+                  type: double_nested
+            double_nested:
+              seq:
+                - id: single_double_things
+                  type: s2
+                  repeat: expr
+                  repeat-expr: _parent.single_things.length
+                - id: double_things
+                  type: s2
+                  repeat: expr
+                  repeat-expr: _root.num_double_things
+        """
     end
 
     io =
@@ -289,7 +289,7 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
         2::signed-integer-16,
         3::signed-integer-16,
         4::signed-integer-16,
-        5::signed-integer-16,
+        5::signed-integer-16
       >>)
 
     list_of_things = RuntimeNestedParentExpression.read!(io)
@@ -300,20 +300,19 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
     assert [3, 4, 5] == list_of_things.thing.double.double_things
   end
 
-
   test "can handle a stream ops" do
     defmodule RuntimeStreamOps do
       use KaitaiToolkit.Struct,
-          contents: """
-            meta:
-              id: list_of_things
-              title: A bunch of things
-            seq:
-              - id: half_the_things
-                size: _io.size / 2
-              - id: other_half_the_things
-                size: _io.size / 2
-          """
+        contents: """
+          meta:
+            id: list_of_things
+            title: A bunch of things
+          seq:
+            - id: half_the_things
+              size: _io.size / 2
+            - id: other_half_the_things
+              size: _io.size / 2
+        """
     end
 
     io =
@@ -321,7 +320,7 @@ defmodule KaitaiToolkitTest.Formats.DynamicEpressionTest do
         1::signed-integer-8,
         2::signed-integer-8,
         3::signed-integer-8,
-        4::signed-integer-8,
+        4::signed-integer-8
       >>)
 
     list_of_things = RuntimeStreamOps.read!(io)
