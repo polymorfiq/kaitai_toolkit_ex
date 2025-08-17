@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="katai_struct" type="mix">
+    <CLASSES />
+    <JAVADOC />
+    <SOURCES>
+      <root url="file://$PROJECT_DIR$/../katai_struct/lib" />
+      <root url="file://$PROJECT_DIR$/../katai_struct/lib" />
+    </SOURCES>
+  </library>
+</component>

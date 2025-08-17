@@ -81,7 +81,7 @@ defmodule KaitaiToolkit.Generation do
         def read_file!(path) do
           %{size: file_size} = File.stat!(path)
 
-          File.open!(path, [:read], fn file ->
+          File.open!(path, [:read, :binary, :raw, read_ahead: 1024], fn file ->
             IO.binstream(file, 1) |> read_io_stream!(file_size)
           end)
         end
@@ -217,6 +217,21 @@ defmodule KaitaiToolkit.Generation do
     end
   end
 
+  defp gen_attrib_read_fn(%{attr: %{size: size}} = attr, attrib_ctx) when is_number(size) do
+    quote do
+      io = KaitaiStruct.Stream.substream!(io, unquote(size))
+      unquote(gen_attrib_read_fn(%{attr | attr: %{attr.attr | size: nil}}, attrib_ctx))
+    end
+  end
+
+  defp gen_attrib_read_fn(%{attr: %{size: {:expr, expr_str}}} = attr, attrib_ctx) do
+    quote do
+      size = KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
+      io = KaitaiStruct.Stream.substream!(io, size)
+      unquote(gen_attrib_read_fn(%{attr | attr: %{attr.attr | size: nil}}, attrib_ctx))
+    end
+  end
+
   defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{contents: contents}}, _)
        when is_list(contents) do
     quote do
@@ -254,35 +269,11 @@ defmodule KaitaiToolkit.Generation do
     end
   end
 
-  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{size_eos: true}}, _) do
-    quote do
-      size = trunc(KaitaiStruct.Stream.size(io) - KaitaiStruct.Stream.pos(io))
-      KaitaiStruct.Stream.read_bytes_array!(io, size)
-    end
-  end
-
-  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{size: size}}, _) when is_number(size) do
-    quote do
-      KaitaiStruct.Stream.read_bytes_array!(io, unquote(size))
-    end
-  end
-
-  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{size: {:expr, expr_str}}}, _) do
-    quote do
-      size = KaitaiToolkit.Struct.parse_expr!(ctx, unquote({:expr, expr_str}))
-      KaitaiStruct.Stream.read_bytes_array!(io, size)
-    end
-  end
-
   defp gen_attrib_read_fn(%{data_type: :io}, _),
     do: quote(do: io)
 
-  defp gen_attrib_read_fn(%{data_type: :str} = attr, _) do
-    quote do
-      size = KaitaiToolkit.Struct.parse_expr!(ctx, unquote(attr.attr.size))
-      KaitaiStruct.Stream.read_bytes_array!(io, size)
-    end
-  end
+  defp gen_attrib_read_fn(%{data_type: :str}, _),
+    do: quote(do: KaitaiStruct.Stream.read_bytes_full!(io))
 
   defp gen_attrib_read_fn(%{data_type: :strz} = attr, _) do
     quote do
@@ -355,6 +346,12 @@ defmodule KaitaiToolkit.Generation do
 
          val
        end}
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{size: nil}}, _) do
+    quote do
+      KaitaiStruct.Stream.read_bytes_full!(io)
     end
   end
 
