@@ -187,6 +187,38 @@ defmodule KaitaiToolkit.Generation do
     end
   end
 
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{contents: contents}}, _) when is_list(contents) do
+    quote do
+      expected = unquote(Enum.reduce(contents, <<>>, fn
+          bytes, acc when is_binary(bytes) ->
+            acc <> <<bytes::binary>>
+
+          {:string, content_str}, acc ->
+            acc <> <<content_str::binary>>
+      end))
+
+      KaitaiStruct.Stream.ensure_fixed_contents!(io, expected)
+      expected
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{contents: contents}}, _) when is_binary(contents) do
+    quote do
+      expected = unquote(contents)
+
+      KaitaiStruct.Stream.ensure_fixed_contents!(io, expected)
+      expected
+    end
+  end
+
+  defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{contents: {:string, content_str}}}, _) do
+    quote do
+      expected = unquote(content_str)
+      KaitaiStruct.Stream.ensure_fixed_contents!(io, expected)
+      expected
+    end
+  end
+
   defp gen_attrib_read_fn(%{data_type: :bytes, attr: %{size_eos: true}}, _) do
     quote do
       size = trunc(KaitaiStruct.Stream.size(io) - KaitaiStruct.Stream.pos(io))

@@ -175,9 +175,18 @@ defmodule KaitaiToolkit.Ksy.Attribute do
   defp doc_ref(doc_ref) when is_binary(doc_ref), do: [doc_ref]
   defp doc_ref(doc_refs) when is_list(doc_refs), do: doc_refs
 
-  defp contents(nil), do: <<>>
-  defp contents(contents) when is_list(contents), do: :binary.list_to_bin(contents)
-  defp contents(contents) when is_binary(contents), do: contents
+  defp contents(nil), do: nil
+  defp contents(num) when is_integer(num), do: <<num>>
+  defp contents(str) when is_binary(str), do: {:string, str}
+  defp contents(contents) when is_list(contents) do
+    all_nums = contents |> Enum.filter(& is_integer(&1))
+
+    if Enum.count(all_nums) == Enum.count(contents) do
+      :binary.list_to_bin(contents)
+    else
+      Enum.map(contents, &contents/1)
+    end
+  end
 
   defp repeat(nil), do: nil
   defp repeat("eos"), do: :eos
