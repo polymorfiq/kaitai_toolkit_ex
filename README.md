@@ -17,7 +17,7 @@ by adding `kaitai_toolkit` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:kaitai_toolkit, "~> 0.0.12"}
+    {:kaitai_toolkit, "~> 0.0.13"}
   ]
 end
 ```

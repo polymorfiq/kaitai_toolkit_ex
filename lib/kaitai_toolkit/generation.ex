@@ -254,7 +254,7 @@ defmodule KaitaiToolkit.Generation do
       KaitaiStruct.Stream.read_bytes_term!(
         io,
         unquote(attr.attr.encoding || "UTF-8"),
-        unquote(0),
+        unquote(<<0>>),
         unquote(attr.attr.include),
         unquote(attr.attr.consume),
         unquote(attr.attr.eos_error)
